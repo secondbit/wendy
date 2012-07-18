@@ -66,7 +66,7 @@ func (t *RoutingTable) Insert(n Node) {
 // GetNode is concurrency-safe, and will return a TimeoutError if it is blocked for more than one second.
 func (t *RoutingTable) GetNode(row, col, entry int) (n Node, err error) {
 	select {
-	case n = <-getNode(row, col, entry):
+	case n = <-t.getNode(row, col, entry):
 		return n, nil
 	case time.After(1 * time.Second):
 		return nil, throwTimeout("Node retrieval", 1)
@@ -111,12 +111,89 @@ func (t *RoutingTable) listen() {
 // Neighborhood contains the 32 closest Nodes to the current Node, based on the amount of time a request takes to complete (with a multiplier for Nodes in a different Region, in an attempt to keep requests within a Region).
 //
 // The Neighborhood is not used in routing, it is only maintained for ordering entries within columns of the RoutingTable.
-type Neighborhood [32]Node
+type Neighborhood struct {
+	nodes [32]Node
+	input chan Node
+	req   chan neighborhoodRequest
+	kill  chan bool
+}
+
+// neighborhoodRequest is a request for a specific Node in the Neighborhood. It is simply the position or ID of the Node that is to be retrieved, along with the channel that the Node or position is to be passed to when it has been retrieved.
+// If the position is specified, the response will be a Node. If the NodeID is specified, the response will be its position (or -1, if it's not in the Neighborhood).
+type neighborhoodRequest struct {
+	pos  int
+	id   NodeID
+	resp chan interface{}
+}
+
+// Contains checks the Neighborhood to see if it contains a NodeID of n and returns a boolean.
+//
+// Contains is concurrency-safe, and returns a TimeoutError if the check is blocked for longer than 1 second.
+func (n *Neighborhood) Contains(node NodeID) (bool, err) {
+	select {
+	case c := <-n.contains(node):
+		if c < 0 {
+			return false, nil
+		} else {
+			return true, nil
+		}
+	case time.After(1 * time.Second):
+		return false, throwTimeout("Neighborhood check", 1)
+	}
+}
+
+// contains is a low-level function that actually checks the Neighborhood for a NodeID.
+// It takes care of the construction of the channels that communicate and the request to the Neighborhood.
+func (n *Neighborhood) contains(node NodeID) chan int {
+	resp := make(chan int)
+	t.req <- neighborhoodRequest{id: node, pos: -1, resp: resp}
+	return resp
+}
+
+// listen is a low-level helper that will set the Neighborhood listening for requests and inserts. Passing a value to the Neighborhood's kill property will break the listen loop.
+func (n *Neighborhood) listen() {
+	for {
+		select {
+		case node := <-n.input:
+			//TODO: Insert node into the neighborhood
+			break
+		case r := <-n.req:
+			if r.id != nil {
+				for i, v := range n.nodes {
+					if v.ID == r.id {
+						r.resp <- v
+						break
+					}
+				}
+			} else {
+				if r.pos >= 0 && r.pos <= 32 {
+					resp <- n.nodes[r.pos]
+				} else {
+					resp <- nil
+				}
+			}
+			break
+		case k := <-n.kill:
+			return
+		}
+	}
+}
 
 // LeafSet contains the 32 closest Nodes to the current Node, based on the numerical proximity of their NodeIDs.
 //
 // The LeafSet is divided into Left and Right; the NodeID space is considered to be circular and thus wraps around. Left contains NodeIDs less than the current NodeID. Right contains NodeIDs greater than the current NodeID.
 type LeafSet struct {
-	Left  [16]Node
-	Right [16]Node
+	left  [16]Node
+	right [16]Node
+	input chan Node
+	req   chan leafSetRequest
+	kill  chan bool
+}
+
+// leafSetRequest is a request for a specific Node in the LeafSet. It is simply the position or ID of the Node that is to be retrieved, along with the channel that the Node or ID is to be passed to when it has been retrieved.
+// If the position is specified, the response will be a Node. If the ID is specified, the response will be the Node's position, or 0 if it is absent. A negative position indicates it is to the left of the Node. A positive position indicates it is to the right of the Node.
+type leafSetRequest struct {
+	pos  int
+	id   NodeID
+	resp chan interface{}
 }
