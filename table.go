@@ -44,6 +44,15 @@ type Node struct {
 	mutex     sync.Mutex // lock and unlock a Node for concurrency safety
 }
 
+// Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
+func (n *Node) Proximity(self *Node) int64 {
+	multiplier := int64(1)
+	if n.Region != self.Region {
+		multiplier = 5
+	}
+	return proximity * multiplier
+}
+
 // RoutingTable is what a Node uses to route requests through the cluster.
 // RoutingTables have 32 rows of 16 columns each, and each column has an indeterminate number of entries in it.
 // A Node's row in the RoutingTable is the index of the first significant digit between the Node and the Node the RoutingTable belongs to.
@@ -87,26 +96,37 @@ func (t *RoutingTable) getNode(row, col, entry int) chan *Node {
 // listen is a low-level helper that will set the RoutingTable listening for requests and inserts. Passing a value to the RoutingTable's kill property will break the listen loop.
 func (t *RoutingTable) listen() {
 	for {
+	loop:
 		select {
 		case n := <-t.input:
 			fmt.Printf("%s", n.ID)
-			//TODO: Insert n into the table
-			break
-		case r := <-t.req:
-			if r.row > 32 {
-				r.resp <- nil
-				break
+			row := t.self.ID.CommonPrefixLen(n)
+			col := uint8(t.self.ID[row])
+			for _, node := range t.nodes[row][col] {
+				if node.ID.Equals(n.ID) {
+					break loop
+				}
 			}
-			if r.col > 16 {
+			t.nodes[row][col] = append(t.nodes[row][col], n)
+			break loop
+		case r := <-t.req:
+			if r.row > 31 {
+				fmt.Println("Invalid row input: %d", r.row)
 				r.resp <- nil
-				break
+				break loop
+			}
+			if r.col > 15 {
+				fmt.Println("Invalid col input: %d", r.col)
+				r.resp <- nil
+				break loop
 			}
 			if r.entry > len(t.nodes[r.row][r.col]) {
+				fmt.Println("Invalid entry input: %d", r.entry)
 				r.resp <- nil
-				break
+				break loop
 			}
 			r.resp <- t.nodes[r.row][r.col][r.entry]
-			break
+			break loop
 		case <-t.kill:
 			return
 		}
@@ -118,6 +138,7 @@ func (t *RoutingTable) listen() {
 // The Neighborhood is not used in routing, it is only maintained for ordering entries within columns of the RoutingTable.
 type Neighborhood struct {
 	nodes [32]*Node
+	self  *Node
 	input chan *Node
 	req   chan neighborhoodRequest
 	kill  chan bool
@@ -165,27 +186,42 @@ func (n *Neighborhood) contains(node NodeID) chan neighborhoodResponse {
 // listen is a low-level helper that will set the Neighborhood listening for requests and inserts. Passing a value to the Neighborhood's kill property will break the listen loop.
 func (n *Neighborhood) listen() {
 	for {
+	loop:
 		select {
 		case node := <-n.input:
 			fmt.Printf("%s", node.ID)
-			//TODO: Insert node into the neighborhood
-			break
+			if len(n.nodes) < 32 {
+				n.nodes[len(n.nodes)] = node
+				break loop
+			}
+			loser := -1
+			for i, v := range n.nodes {
+				if loser < 0 {
+					loser = i
+					continue
+				}
+				if n.nodes[i].Proximity(n.self) > n.nodes[loser].Proximity(n.self) || n.nodes[i].Proximity(n.self) < 0 {
+					loser = i
+				}
+			}
+			n.nodes[loser] = node
+			break loop
 		case r := <-n.req:
 			if r.id != nil {
 				for i, v := range n.nodes {
 					if v.ID.Equals(r.id) {
 						r.resp <- neighborhoodResponse{pos: i, node: v}
-						break
+						break loop
 					}
 				}
 			} else {
-				if r.pos >= 0 && r.pos <= 32 {
+				if r.pos >= 0 && r.pos < 32 {
 					r.resp <- neighborhoodResponse{node: n.nodes[r.pos], pos: r.pos}
 				} else {
 					r.resp <- neighborhoodResponse{node: nil, pos: -1}
 				}
 			}
-			break
+			break loop
 		case <-n.kill:
 			return
 		}
