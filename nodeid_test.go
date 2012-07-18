@@ -35,11 +35,11 @@ func TestNodeIDDigitEqualsDiscardsInsignificantBits(t *testing.T) {
 func TestNodeIDDigitDiff(t *testing.T) {
 	d1 := NodeIDDigit(0xf)
 	d2 := NodeIDDigit(0xd0)
-	if d1.Diff(d2) != 32 {
-		t.Errorf("Difference should be 32, was %v instead", d1.Diff(d2))
+	if d1.Diff(d2) != 2 {
+		t.Errorf("Difference should be 2, was %v instead", d1.Diff(d2))
 	}
-	if d2.Diff(d1) != 32 {
-		t.Errorf("Difference should be 32, was %v instead", d2.Diff(d1))
+	if d2.Diff(d1) != 2 {
+		t.Errorf("Difference should be 2, was %v instead", d2.Diff(d1))
 	}
 	if d2.Diff(NodeIDDigit(0xd)) != 0 {
 		t.Errorf("Difference should be 0, was %v instead", d2.Diff(NodeIDDigit(0xd)))
@@ -102,11 +102,11 @@ func TestNodeIDCommonPrefixLen(t *testing.T) {
 func TestNodeIDDiff(t *testing.T) {
 	n1 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
 	n2 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xd0, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
-	if n1.Diff(n2) != 32 {
-		t.Errorf("Difference should be 32, was %v instead", n1.Diff(n2))
+	if n1.Diff(n2) != 2 {
+		t.Errorf("Difference should be 2, was %v instead", n1.Diff(n2))
 	}
-	if n2.Diff(n1) != 32 {
-		t.Errorf("Difference should be 32, was %v instead", n2.Diff(n1))
+	if n2.Diff(n1) != 2 {
+		t.Errorf("Difference should be 2, was %v instead", n2.Diff(n1))
 	}
 	if n2.Diff(n2) != 0 {
 		t.Errorf("Difference should be 0, was %v instead", n2.Diff(n2))

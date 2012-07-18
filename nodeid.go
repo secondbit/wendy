@@ -17,8 +17,8 @@ func NodeIDDigitsFromByte(b byte) (NodeIDDigit, NodeIDDigit) {
 
 // Canonical returns the NodeIDDigit such that it can be safely compared to other NodeIDDigits by standardising which half of the byte is insignificant.
 func (d NodeIDDigit) Canonical() NodeIDDigit {
-	if d <= 0xf {
-		return d << 4
+	if d > 0xf {
+		return d >> 4
 	}
 	return d
 }
