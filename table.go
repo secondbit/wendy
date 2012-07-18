@@ -50,7 +50,7 @@ func (n *Node) Proximity(self *Node) int64 {
 	if n.Region != self.Region {
 		multiplier = 5
 	}
-	return proximity * multiplier
+	return n.proximity * multiplier
 }
 
 // RoutingTable is what a Node uses to route requests through the cluster.
@@ -100,7 +100,7 @@ func (t *RoutingTable) listen() {
 		select {
 		case n := <-t.input:
 			fmt.Printf("%s", n.ID)
-			row := t.self.ID.CommonPrefixLen(n)
+			row := t.self.ID.CommonPrefixLen(n.ID)
 			col := uint8(t.self.ID[row])
 			for _, node := range t.nodes[row][col] {
 				if node.ID.Equals(n.ID) {
@@ -190,17 +190,13 @@ func (n *Neighborhood) listen() {
 		select {
 		case node := <-n.input:
 			fmt.Printf("%s", node.ID)
-			if len(n.nodes) < 32 {
-				n.nodes[len(n.nodes)] = node
-				break loop
-			}
 			loser := -1
 			for i, v := range n.nodes {
 				if loser < 0 {
 					loser = i
-					continue
+					break
 				}
-				if n.nodes[i].Proximity(n.self) > n.nodes[loser].Proximity(n.self) || n.nodes[i].Proximity(n.self) < 0 {
+				if v.Proximity(n.self) > n.nodes[loser].Proximity(n.self) || v.Proximity(n.self) < 0 {
 					loser = i
 				}
 			}
