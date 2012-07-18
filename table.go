@@ -46,6 +46,9 @@ type Node struct {
 
 // Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
 func (n *Node) Proximity(self *Node) int64 {
+	if n == nil {
+		return -1
+	}
 	multiplier := int64(1)
 	if n.Region != self.Region {
 		multiplier = 5
@@ -196,7 +199,11 @@ func (n *Neighborhood) listen() {
 					loser = i
 					break
 				}
-				if v.Proximity(n.self) > n.nodes[loser].Proximity(n.self) || v.Proximity(n.self) < 0 {
+				if v.Proximity(n.self) < 0 {
+					loser = i
+					break
+				}
+				if v.Proximity(n.self) > n.nodes[loser].Proximity(n.self) {
 					loser = i
 				}
 			}
