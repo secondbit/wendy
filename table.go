@@ -46,6 +46,7 @@ type Node struct {
 
 // Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
 func (n *Node) Proximity(self *Node) int64 {
+	n.mutex.Lock()
 	if n == nil {
 		return -1
 	}
@@ -53,7 +54,9 @@ func (n *Node) Proximity(self *Node) int64 {
 	if n.Region != self.Region {
 		multiplier = 5
 	}
-	return n.proximity * multiplier
+	score := n.proximity * multiplier
+	n.mutex.Unlock()
+	return score
 }
 
 // RoutingTable is what a Node uses to route requests through the cluster.
