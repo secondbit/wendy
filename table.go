@@ -2,6 +2,8 @@ package pastry
 
 import (
 	"fmt"
+	"sync"
+	"time"
 )
 
 // TimeoutError represents an error that was raised when a call has taken too long. It is its own type for the purposes of handling the error.
@@ -28,7 +30,7 @@ type routingTableRequest struct {
 	row   int
 	col   int
 	entry int
-	resp  chan Node
+	resp  chan *Node
 }
 
 // Node represents a specific server in the cluster.
@@ -38,7 +40,8 @@ type Node struct {
 	Port      int    // The port the Node is listening on
 	Region    string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
 	ID        NodeID
-	proximity int64 // The raw proximity score for the Node, not adjusted for Region
+	proximity int64      // The raw proximity score for the Node, not adjusted for Region
+	mutex     sync.Mutex // lock and unlock a Node for concurrency safety
 }
 
 // RoutingTable is what a Node uses to route requests through the cluster.
@@ -49,33 +52,34 @@ type Node struct {
 //
 // RoutingTables are concurrency-safe; the only way to interact with the RoutingTable is through channels.
 type RoutingTable struct {
-	self  Node
-	nodes [32][16][]Node
-	input chan Node
+	self  *Node
+	nodes [32][16][]*Node
+	input chan *Node
 	req   chan routingTableRequest
 	kill  chan bool
 }
 
 // Insert inserts a new Node into the RoutingTable.
-func (t *RoutingTable) Insert(n Node) {
+func (t *RoutingTable) Insert(n *Node) {
 	t.input <- n
 }
 
 // GetNode retrieves a Node from the RoutingTable based on its row, column, and position. The Node is returned, or an error. Note that a nil response from both variables signifies invalid query parameters; either the row, column, or entry was outside the bounds of the table.
 //
 // GetNode is concurrency-safe, and will return a TimeoutError if it is blocked for more than one second.
-func (t *RoutingTable) GetNode(row, col, entry int) (n Node, err error) {
+func (t *RoutingTable) GetNode(row, col, entry int) (*Node, error) {
 	select {
-	case n = <-t.getNode(row, col, entry):
+	case n := <-t.getNode(row, col, entry):
 		return n, nil
-	case time.After(1 * time.Second):
+	case <-time.After(1 * time.Second):
 		return nil, throwTimeout("Node retrieval", 1)
 	}
+	return nil, nil
 }
 
 // getNode is the low-level implementation of Node retrieval. It takes care of the actual retrieval of Nodes, creation of the routingTableRequest, and returns the response channel.
-func (t *RoutingTable) getNode(row, col, entry int) chan Node {
-	resp := make(chan Node)
+func (t *RoutingTable) getNode(row, col, entry int) chan *Node {
+	resp := make(chan *Node)
 	t.req <- routingTableRequest{row: row, col: col, entry: entry, resp: resp}
 	return resp
 }
@@ -85,6 +89,7 @@ func (t *RoutingTable) listen() {
 	for {
 		select {
 		case n := <-t.input:
+			fmt.Printf("%s", n.ID)
 			//TODO: Insert n into the table
 			break
 		case r := <-t.req:
@@ -96,13 +101,13 @@ func (t *RoutingTable) listen() {
 				r.resp <- nil
 				break
 			}
-			if r.entry > len(t.nodes[row][col]) {
+			if r.entry > len(t.nodes[r.row][r.col]) {
 				r.resp <- nil
 				break
 			}
-			r.resp <- t.nodes[row][col][entry]
+			r.resp <- t.nodes[r.row][r.col][r.entry]
 			break
-		case k := <-t.kill:
+		case <-t.kill:
 			return
 		}
 	}
@@ -112,8 +117,8 @@ func (t *RoutingTable) listen() {
 //
 // The Neighborhood is not used in routing, it is only maintained for ordering entries within columns of the RoutingTable.
 type Neighborhood struct {
-	nodes [32]Node
-	input chan Node
+	nodes [32]*Node
+	input chan *Node
 	req   chan neighborhoodRequest
 	kill  chan bool
 }
@@ -123,30 +128,37 @@ type Neighborhood struct {
 type neighborhoodRequest struct {
 	pos  int
 	id   NodeID
-	resp chan interface{}
+	resp chan neighborhoodResponse
+}
+
+// neighborhoodResponse is a response from a neighborhoodRequest. It contains either the position or Node that the request resulted in.
+type neighborhoodResponse struct {
+	pos  int
+	node *Node
 }
 
 // Contains checks the Neighborhood to see if it contains a NodeID of n and returns a boolean.
 //
 // Contains is concurrency-safe, and returns a TimeoutError if the check is blocked for longer than 1 second.
-func (n *Neighborhood) Contains(node NodeID) (bool, err) {
+func (n *Neighborhood) Contains(node NodeID) (bool, error) {
 	select {
 	case c := <-n.contains(node):
-		if c < 0 {
+		if c.pos < 0 {
 			return false, nil
 		} else {
 			return true, nil
 		}
-	case time.After(1 * time.Second):
+	case <-time.After(1 * time.Second):
 		return false, throwTimeout("Neighborhood check", 1)
 	}
+	return false, nil
 }
 
 // contains is a low-level function that actually checks the Neighborhood for a NodeID.
 // It takes care of the construction of the channels that communicate and the request to the Neighborhood.
-func (n *Neighborhood) contains(node NodeID) chan int {
-	resp := make(chan int)
-	t.req <- neighborhoodRequest{id: node, pos: -1, resp: resp}
+func (n *Neighborhood) contains(node NodeID) chan neighborhoodResponse {
+	resp := make(chan neighborhoodResponse)
+	n.req <- neighborhoodRequest{id: node, pos: -1, resp: resp}
 	return resp
 }
 
@@ -155,25 +167,26 @@ func (n *Neighborhood) listen() {
 	for {
 		select {
 		case node := <-n.input:
+			fmt.Printf("%s", node.ID)
 			//TODO: Insert node into the neighborhood
 			break
 		case r := <-n.req:
 			if r.id != nil {
 				for i, v := range n.nodes {
-					if v.ID == r.id {
-						r.resp <- v
+					if v.ID.Equals(r.id) {
+						r.resp <- neighborhoodResponse{pos: i, node: v}
 						break
 					}
 				}
 			} else {
 				if r.pos >= 0 && r.pos <= 32 {
-					resp <- n.nodes[r.pos]
+					r.resp <- neighborhoodResponse{node: n.nodes[r.pos], pos: r.pos}
 				} else {
-					resp <- nil
+					r.resp <- neighborhoodResponse{node: nil, pos: -1}
 				}
 			}
 			break
-		case k := <-n.kill:
+		case <-n.kill:
 			return
 		}
 	}
@@ -183,9 +196,9 @@ func (n *Neighborhood) listen() {
 //
 // The LeafSet is divided into Left and Right; the NodeID space is considered to be circular and thus wraps around. Left contains NodeIDs less than the current NodeID. Right contains NodeIDs greater than the current NodeID.
 type LeafSet struct {
-	left  [16]Node
-	right [16]Node
-	input chan Node
+	left  [16]*Node
+	right [16]*Node
+	input chan *Node
 	req   chan leafSetRequest
 	kill  chan bool
 }
@@ -195,5 +208,11 @@ type LeafSet struct {
 type leafSetRequest struct {
 	pos  int
 	id   NodeID
-	resp chan interface{}
+	resp chan leafSetResponse
+}
+
+// leafSetResponse is a response from a leafSetRequest. It contains either the position or Node that the request resulted in.
+type leafSetResponse struct {
+	pos  int
+	node *Node
 }
