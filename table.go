@@ -40,8 +40,21 @@ type Node struct {
 	Port      int    // The port the Node is listening on
 	Region    string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
 	ID        NodeID
-	proximity int64      // The raw proximity score for the Node, not adjusted for Region
-	mutex     sync.Mutex // lock and unlock a Node for concurrency safety
+	proximity int64       // The raw proximity score for the Node, not adjusted for Region
+	mutex     *sync.Mutex // lock and unlock a Node for concurrency safety
+}
+
+// NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
+func NewNode(id NodeID, local, global, region string, port int) *Node {
+	return &Node{
+		ID:        id,
+		LocalIP:   local,
+		GlobalIP:  global,
+		Port:      port,
+		Region:    region,
+		proximity: 0,
+		mutex:     new(sync.Mutex),
+	}
 }
 
 // Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
@@ -72,6 +85,21 @@ type RoutingTable struct {
 	input chan *Node
 	req   chan routingTableRequest
 	kill  chan bool
+}
+
+// NewRoutingTable initialises a new RoutingTable along with all its corresponding channels.
+func NewRoutingTable(self *Node) *RoutingTable {
+	nodes := [32][16][]*Node{}
+	input := make(chan *Node)
+	req := make(chan routingTableRequest)
+	kill := make(chan bool)
+	return &RoutingTable{
+		self:  self,
+		nodes: nodes,
+		input: input,
+		req:   req,
+		kill:  kill,
+	}
 }
 
 // Insert inserts a new Node into the RoutingTable.
@@ -105,9 +133,11 @@ func (t *RoutingTable) listen() {
 	loop:
 		select {
 		case n := <-t.input:
-			fmt.Printf("%s", n.ID)
 			row := t.self.ID.CommonPrefixLen(n.ID)
-			col := uint8(t.self.ID[row])
+			col := int(n.ID[row].Canonical())
+			if t.nodes[row][col] == nil {
+				t.nodes[row][col] = []*Node{}
+			}
 			for _, node := range t.nodes[row][col] {
 				if node.ID.Equals(n.ID) {
 					break loop
@@ -126,7 +156,7 @@ func (t *RoutingTable) listen() {
 				r.resp <- nil
 				break loop
 			}
-			if r.entry > len(t.nodes[r.row][r.col]) {
+			if r.entry > len(t.nodes[r.row][r.col]) - 1 {
 				fmt.Println("Invalid entry input: %d", r.entry)
 				r.resp <- nil
 				break loop
