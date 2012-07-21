@@ -102,6 +102,11 @@ func NewRoutingTable(self *Node) *RoutingTable {
 	}
 }
 
+// Stops stops a RoutingTable from listening for updates.
+func (t *RoutingTable) Stop() {
+	t.kill <- true
+}
+
 // Insert inserts a new Node into the RoutingTable.
 func (t *RoutingTable) Insert(n *Node) {
 	t.input <- n
