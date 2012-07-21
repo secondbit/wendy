@@ -30,6 +30,7 @@ type routingTableRequest struct {
 	row   int
 	col   int
 	entry int
+	del   bool
 	resp  chan *Node
 }
 
@@ -128,7 +129,27 @@ func (t *RoutingTable) GetNode(row, col, entry int) (*Node, error) {
 // getNode is the low-level implementation of Node retrieval. It takes care of the actual retrieval of Nodes, creation of the routingTableRequest, and returns the response channel.
 func (t *RoutingTable) getNode(row, col, entry int) chan *Node {
 	resp := make(chan *Node)
-	t.req <- routingTableRequest{row: row, col: col, entry: entry, resp: resp}
+	t.req <- routingTableRequest{row: row, col: col, entry: entry, resp: resp, del: false}
+	return resp
+}
+
+// RemoveNode removes a Node from the RoutingTable based on its row, column, and position. An error is returned if anything goes wrong. Note that no error will be thrown if you attempt to delete a Node that is not in the RoutingTable.
+//
+// RemoveNode is concurrency-safe, and will return a TimeoutError if it is blocked for more than one second.
+func (t *RoutingTable) RemoveNode(row, col, entry int) error {
+	select {
+	case <-t.removeNode(row, col, entry):
+		return nil
+	case <-time.After(1 * time.Second):
+		return throwTimeout("Node retrieval", 1)
+	}
+	return nil
+}
+
+// removeNode is the low-level implementation of Node removal. It takes care of the actual removal of Nodes, creation of the routingTableRequest, and returns the response channel.
+func (t *RoutingTable) removeNode(row, col, entry int) chan *Node {
+	resp := make(chan *Node)
+	t.req <- routingTableRequest{row: row, col: col, entry: entry, resp: resp, del: true}
 	return resp
 }
 
@@ -143,8 +164,9 @@ func (t *RoutingTable) listen() {
 			if t.nodes[row][col] == nil {
 				t.nodes[row][col] = []*Node{}
 			}
-			for _, node := range t.nodes[row][col] {
+			for i, node := range t.nodes[row][col] {
 				if node.ID.Equals(n.ID) {
+					t.nodes[row][col][i] = node
 					break loop
 				}
 			}
@@ -163,6 +185,26 @@ func (t *RoutingTable) listen() {
 			}
 			if r.entry > len(t.nodes[r.row][r.col])-1 {
 				fmt.Println("Invalid entry input: %d", r.entry)
+				r.resp <- nil
+				break loop
+			}
+			if r.del {
+				if len(t.nodes[r.row][r.col]) == 1 {
+					t.nodes[r.row][r.col] = []*Node{}
+					r.resp <- nil
+					break loop
+				}
+				if r.entry+1 == len(t.nodes[r.row][r.col]) {
+					t.nodes[r.row][r.col] = t.nodes[r.row][r.col][:r.entry]
+					r.resp <- nil
+					break loop
+				}
+				if r.entry == 0 {
+					t.nodes[r.row][r.col] = t.nodes[r.row][r.col][1:]
+					r.resp <- nil
+					break loop
+				}
+				t.nodes[r.row][r.col] = append(t.nodes[r.row][r.col][:r.entry], t.nodes[r.row][r.col][r.entry+1:]...)
 				r.resp <- nil
 				break loop
 			}
