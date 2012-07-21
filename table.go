@@ -156,7 +156,7 @@ func (t *RoutingTable) listen() {
 				r.resp <- nil
 				break loop
 			}
-			if r.entry > len(t.nodes[r.row][r.col]) - 1 {
+			if r.entry > len(t.nodes[r.row][r.col])-1 {
 				fmt.Println("Invalid entry input: %d", r.entry)
 				r.resp <- nil
 				break loop
