@@ -26,7 +26,7 @@ func (d NodeIDDigit) Canonical() NodeIDDigit {
 // String returns the NodeIDDigit encoded as a hexadecimal string with the insignificant half of the byte stripped from the string.
 func (d NodeIDDigit) String() string {
 	asHex := hex.EncodeToString([]byte{byte(d.Canonical())})
-	return string(asHex[0])
+	return string(asHex[1])
 }
 
 // Equals tests two NodeIDDigits for equality, returning true if the digits are considered to be equal and false if they are considered to be inequal. NodeIDDigits are considered to be equal if the significant halves of the bytes that represent them are equal.
