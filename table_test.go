@@ -163,3 +163,61 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 		}
 	}
 }
+
+// How fast can we retrieve nodes by ID
+func BenchmarkRoutingTableGetByID(b *testing.B) {
+	b.StopTimer()
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	seed := strconv.FormatInt(time.Now().UnixNano(), 10)
+	other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	_, err = table.Insert(other)
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		table.Get(other, 0, 0, 0)
+	}
+}
+
+// How fast can we retrieve nodes by position
+func BenchmarkRoutingTableGetByPos(b *testing.B) {
+	b.StopTimer()
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	seed := strconv.FormatInt(time.Now().UnixNano(), 10)
+	other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := table.Insert(other)
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		table.Get(nil, r.Row, r.Col, r.Entry)
+	}
+}
