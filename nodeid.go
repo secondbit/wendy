@@ -3,6 +3,7 @@ package pastry
 import (
 	"encoding/hex"
 	"errors"
+	"math/big"
 )
 
 // NodeIDDigit represents a single base 16 digit of a NodeID, stored as a byte (only half of which is used).
@@ -37,14 +38,6 @@ func (d NodeIDDigit) Equals(other NodeIDDigit) bool {
 // Less tests two NodeIDDigits to determine whether the argument is less than the digit the method is being called on. A digit is considered to be less if its significant half of a byte is less than the significant half of the other digit's byte.
 func (d NodeIDDigit) Less(other NodeIDDigit) bool {
 	return d.Canonical() < other.Canonical()
-}
-
-// Diff returns the difference between two NodeIDDigits as an absolute value.
-func (d NodeIDDigit) Diff(other NodeIDDigit) int {
-	if d.Less(other) {
-		return int(uint8(other.Canonical()) - uint8(d.Canonical()))
-	}
-	return int(uint8(d.Canonical()) - uint8(other.Canonical()))
 }
 
 // NodeID is a unique address for a node in the network. It is an array of 32 NodeIDDigits.
@@ -104,11 +97,42 @@ func (id NodeID) CommonPrefixLen(other NodeID) int {
 	return len(id)
 }
 
-// Diff returns the difference between two NodeIDs as an absolute value. The difference between two NodeIDs is determined by the difference between the first significant digits of those NodeIDs.
-func (id NodeID) Diff(other NodeID) int {
-	sigdigit := id.CommonPrefixLen(other)
-	if sigdigit < len(id) && sigdigit < len(other) {
-		return id[sigdigit].Diff(other[sigdigit])
+// Diff returns the difference between two NodeIDs as an absolute value. It performs the modular arithmetic necessary to find the shortest distance between the IDs in the (2^128)-1 item nodespace.
+func (id NodeID) Diff(other NodeID) *big.Int {
+	node_space := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil)
+	id10 := id.Base10()
+	other10 := other.Base10()
+	max := big.NewInt(0)
+	max = max.Div(node_space, big.NewInt(2))
+	if id10.Cmp(other10) > 0 {
+		diff := big.NewInt(0)
+		diff = diff.Sub(id10, other10)
+		if diff.Cmp(max) <= 0 {
+			return diff
+		}
+		res := big.NewInt(0)
+		res = res.Sub(node_space, id10)
+		res = res.Add(res, other10)
+		res = res.Mod(res, node_space)
+		return res
 	}
-	return 0
+	diff := big.NewInt(0)
+	diff = diff.Sub(other10, id10)
+	if diff.Cmp(max) <= 0 {
+		return diff
+	}
+	res := big.NewInt(0)
+	res = res.Sub(node_space, other10)
+	res = res.Add(res, id10)
+	res = res.Mod(res, node_space)
+	return res
+}
+
+// Base10 returns the NodeID as a base 10 number, translating each base 16 digit.
+func (id NodeID) Base10() *big.Int {
+	res := big.NewInt(0)
+	for i, d := range id {
+		res = res.Add(res, big.NewInt(0).Mul(big.NewInt(int64(d.Canonical())), big.NewInt(0).Exp(big.NewInt(16), big.NewInt(int64(len(id)-1-i)), nil)))
+	}
+	return res
 }

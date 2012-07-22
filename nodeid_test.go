@@ -1,6 +1,9 @@
 package pastry
 
-import "testing"
+import (
+	"math/big"
+	"testing"
+)
 
 // Make sure the NodeIDDigits returned by NodeIDDigitsFromByte actually add up to equal the original byte.
 func TestNodeIDDigitsFromByteEqualsByte(t *testing.T) {
@@ -28,21 +31,6 @@ func TestNodeIDDigitEqualsDiscardsInsignificantBits(t *testing.T) {
 	d2 := NodeIDDigit(0xf0)
 	if !d1.Equals(d2) {
 		t.Errorf("%s should equal %s, but it doesn't.", d1, d2)
-	}
-}
-
-// Make sure the correct difference is reported between NodeIDDigits
-func TestNodeIDDigitDiff(t *testing.T) {
-	d1 := NodeIDDigit(0xf)
-	d2 := NodeIDDigit(0xd0)
-	if d1.Diff(d2) != 2 {
-		t.Errorf("Difference should be 2, was %v instead", d1.Diff(d2))
-	}
-	if d2.Diff(d1) != 2 {
-		t.Errorf("Difference should be 2, was %v instead", d2.Diff(d1))
-	}
-	if d2.Diff(NodeIDDigit(0xd)) != 0 {
-		t.Errorf("Difference should be 0, was %v instead", d2.Diff(NodeIDDigit(0xd)))
 	}
 }
 
@@ -101,14 +89,56 @@ func TestNodeIDCommonPrefixLen(t *testing.T) {
 // Make sure the correct difference is reported between NodeIDs
 func TestNodeIDDiff(t *testing.T) {
 	n1 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
-	n2 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xd0, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
-	if n1.Diff(n2) != 2 {
-		t.Errorf("Difference should be 2, was %v instead", n1.Diff(n2))
+	n2 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xb0})
+	diff1 := n1.Diff(n2)
+	if diff1.Cmp(big.NewInt(2)) != 0 {
+		t.Errorf("Difference should be 2, was %v instead", diff1)
 	}
-	if n2.Diff(n1) != 2 {
-		t.Errorf("Difference should be 2, was %v instead", n2.Diff(n1))
+	diff2 := n2.Diff(n1)
+	if diff2.Cmp(big.NewInt(2)) != 0 {
+		t.Errorf("Difference should be 2, was %v instead", diff2)
 	}
-	if n2.Diff(n2) != 0 {
-		t.Errorf("Difference should be 0, was %v instead", n2.Diff(n2))
+	diff3 := n2.Diff(n2)
+	if diff3.Cmp(big.NewInt(0)) != 0 {
+		t.Errorf("Difference should be 0, was %v instead", diff3)
+	}
+}
+
+// Make sure NodeID comparisons wrap around the circle
+func TestNodeIDDiffWrap(t *testing.T) {
+	n1, err := NodeIDFromBytes([]byte{uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)})
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	n2, err := NodeIDFromBytes([]byte{uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255)})
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	diff1 := n1.Diff(n2)
+	if diff1.Cmp(big.NewInt(1)) != 0 {
+		t.Errorf("Difference should be 1, was %v instead", diff1)
+	}
+	diff2 := n2.Diff(n1)
+	if diff2.Cmp(big.NewInt(1)) != 0 {
+		t.Errorf("Difference should be 1, was %v instead", diff2)
+	}
+	diff3 := n2.Diff(n2)
+	if diff3.Cmp(big.NewInt(0)) != 0 {
+		t.Errorf("Difference should be 0, was %v instead", diff3)
+	}
+}
+
+// Quick benchmark to test how expensive diffing nodes is
+func BenchmarkNodeIDDiff(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		n1, err := NodeIDFromBytes([]byte{uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)})
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		n2, err := NodeIDFromBytes([]byte{uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255)})
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		n1.Diff(n2)
 	}
 }
