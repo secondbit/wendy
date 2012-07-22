@@ -86,9 +86,12 @@ func (n *Node) Proximity(self *Node) int64 {
 
 // RoutingTable is what a Node uses to route requests through the cluster.
 // RoutingTables have 32 rows of 16 columns each, and each column has an indeterminate number of entries in it.
+//
 // A Node's row in the RoutingTable is the index of the first significant digit between the Node and the Node the RoutingTable belongs to.
+//
 // A Node's column in the RoutingTable is the numerical value of the first significant digit between the Node and the Node the RoutingTable belongs to.
-// A Node's position in the column is determined by ordering all Nodes in that column by proximity to the Node the RoutingTable belongs to.
+//
+// Nodes are simply appended to the end of the slice that each column contains, so their position in the slice has no bearing on routing. The Node.Proximity() method should be used in that case.
 //
 // RoutingTables are concurrency-safe; the only way to interact with the RoutingTable is through channels.
 type RoutingTable struct {
