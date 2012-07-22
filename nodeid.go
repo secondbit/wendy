@@ -99,32 +99,26 @@ func (id NodeID) CommonPrefixLen(other NodeID) int {
 
 // Diff returns the difference between two NodeIDs as an absolute value. It performs the modular arithmetic necessary to find the shortest distance between the IDs in the (2^128)-1 item nodespace.
 func (id NodeID) Diff(other NodeID) *big.Int {
-	node_space := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil)
+	max := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil)
 	id10 := id.Base10()
 	other10 := other.Base10()
-	max := big.NewInt(0)
-	max = max.Div(node_space, big.NewInt(2))
+	middle := big.NewInt(0).Div(max, big.NewInt(2))
+	larger := big.NewInt(0)
+	smaller := big.NewInt(0)
 	if id10.Cmp(other10) > 0 {
-		diff := big.NewInt(0)
-		diff = diff.Sub(id10, other10)
-		if diff.Cmp(max) <= 0 {
-			return diff
-		}
-		res := big.NewInt(0)
-		res = res.Sub(node_space, id10)
-		res = res.Add(res, other10)
-		res = res.Mod(res, node_space)
-		return res
+		larger = id10
+		smaller = other10
+	} else {
+		larger = other10
+		smaller = id10
 	}
-	diff := big.NewInt(0)
-	diff = diff.Sub(other10, id10)
-	if diff.Cmp(max) <= 0 {
+	diff := big.NewInt(0).Sub(larger, smaller)
+	if diff.Cmp(middle) <= 0 {
 		return diff
 	}
-	res := big.NewInt(0)
-	res = res.Sub(node_space, other10)
-	res = res.Add(res, id10)
-	res = res.Mod(res, node_space)
+	res := big.NewInt(0).Sub(max, larger)
+	res = res.Add(res, smaller)
+	res = res.Mod(res, max)
 	return res
 }
 
