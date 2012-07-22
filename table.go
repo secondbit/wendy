@@ -25,13 +25,24 @@ func throwTimeout(action string, timeout int) TimeoutError {
 	}
 }
 
-// routingTableRequest is a request for a specific Node in the routing table. It is simply the row, column, and entry that is to be retrieved, along with the channel that the Node is to be passed to when it has been retrieved.
+type reqMode int
+
+const SET = reqMode(0)
+const GET = reqMode(1)
+const DEL = reqMode(2)
+
+// routingTableRequest is a request for a specific Node in the routing table. The Node field determines the Node being queried against. Should it not be set, the Row/Col/Entry fields are used in its stead.
+//
+//The Mode field is used to determine whether the request is to insert, get, or remove the Node from the RoutingTable.
+//
+// Methods that return a routingTableRequest will always do their best to fully populate it, meaning the result can be used to, for example, determine the Row/Col/Entry of a Node.
 type routingTableRequest struct {
-	row   int
-	col   int
-	entry int
-	del   bool
-	resp  chan *Node
+	Row   int
+	Col   int
+	Entry int
+	Mode  reqMode
+	Node  *Node
+	resp  chan *routingTableRequest
 }
 
 // Node represents a specific server in the cluster.
@@ -84,7 +95,7 @@ type RoutingTable struct {
 	self  *Node
 	nodes [32][16][]*Node
 	input chan *Node
-	req   chan routingTableRequest
+	req   chan *routingTableRequest
 	kill  chan bool
 }
 
@@ -92,7 +103,7 @@ type RoutingTable struct {
 func NewRoutingTable(self *Node) *RoutingTable {
 	nodes := [32][16][]*Node{}
 	input := make(chan *Node)
-	req := make(chan routingTableRequest)
+	req := make(chan *routingTableRequest)
 	kill := make(chan bool)
 	return &RoutingTable{
 		self:  self,
@@ -109,47 +120,162 @@ func (t *RoutingTable) Stop() {
 }
 
 // Insert inserts a new Node into the RoutingTable.
-func (t *RoutingTable) Insert(n *Node) {
-	t.input <- n
+//
+// Insert will return a populated routingTableRequest or a TimeoutError. If both returns are nil, Insert was unable to store the Node in the RoutingTable, as the Node's ID is the same as the current Node's ID or the Node is nil.
+//
+// Insert is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocked for more than one second.
+func (t *RoutingTable) Insert(n *Node) (*routingTableRequest, error) {
+	resp := make(chan *routingTableRequest)
+	t.req <- &routingTableRequest{Node: n, Mode: SET, resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Node insertion", 1)
+	}
+	return nil, nil
 }
 
-// GetNode retrieves a Node from the RoutingTable based on its row, column, and position. The Node is returned, or an error. Note that a nil response from both variables signifies invalid query parameters; either the row, column, or entry was outside the bounds of the table.
+// insert does the actual low-level insertion of a Node. It should *only* be called from the listen method of the RoutingTable, to preserve its concurrency-safe property.
+func (t *RoutingTable) insert(r *routingTableRequest) *routingTableRequest {
+	if r.Node == nil {
+		return nil
+	}
+	row := t.self.ID.CommonPrefixLen(r.Node.ID)
+	if row > len(t.nodes) {
+		return nil
+	}
+	col := int(r.Node.ID[row].Canonical())
+	if col > len(t.nodes[row]) {
+		return nil
+	}
+	if t.nodes[row][col] == nil {
+		t.nodes[row][col] = []*Node{}
+	}
+	for i, node := range t.nodes[row][col] {
+		if node.ID.Equals(r.Node.ID) {
+			t.nodes[row][col][i] = node
+			return &routingTableRequest{Mode: SET, Node: node, Row: row, Col: col, Entry: i}
+		}
+	}
+	t.nodes[row][col] = append(t.nodes[row][col], r.Node)
+	return &routingTableRequest{Mode: SET, Node: r.Node, Row: row, Col: col, Entry: len(t.nodes[row][col]) - 1}
+}
+
+// Get retrieves a Node from the RoutingTable. If no Node (nil) is passed, the row, col, and entry arguments are used to select the node.
 //
-// GetNode is concurrency-safe, and will return a TimeoutError if it is blocked for more than one second.
-func (t *RoutingTable) GetNode(row, col, entry int) (*Node, error) {
+// Get returns a populated routingTableRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results.
+//
+// Get is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocekd for more than one second.
+func (t *RoutingTable) Get(node *Node, row, col, entry int) (*routingTableRequest, error) {
+	resp := make(chan *routingTableRequest)
+	t.req <- &routingTableRequest{Node: node, Row: row, Col: col, Entry: entry, Mode: GET, resp: resp}
 	select {
-	case n := <-t.getNode(row, col, entry):
-		return n, nil
+	case r := <-resp:
+		return r, nil
 	case <-time.After(1 * time.Second):
 		return nil, throwTimeout("Node retrieval", 1)
 	}
 	return nil, nil
 }
 
-// getNode is the low-level implementation of Node retrieval. It takes care of the actual retrieval of Nodes, creation of the routingTableRequest, and returns the response channel.
-func (t *RoutingTable) getNode(row, col, entry int) chan *Node {
-	resp := make(chan *Node)
-	t.req <- routingTableRequest{row: row, col: col, entry: entry, resp: resp, del: false}
-	return resp
-}
-
-// RemoveNode removes a Node from the RoutingTable based on its row, column, and position. An error is returned if anything goes wrong. Note that no error will be thrown if you attempt to delete a Node that is not in the RoutingTable.
-//
-// RemoveNode is concurrency-safe, and will return a TimeoutError if it is blocked for more than one second.
-func (t *RoutingTable) RemoveNode(row, col, entry int) error {
-	select {
-	case <-t.removeNode(row, col, entry):
-		return nil
-	case <-time.After(1 * time.Second):
-		return throwTimeout("Node retrieval", 1)
+// get does the actual low-level retrieval of a Node from the RoutingTable. It should *only* ever be called from the RoutingTable's listen method, to preserve its concurrency-safe property.
+func (t *RoutingTable) get(r *routingTableRequest) *routingTableRequest {
+	row := r.Row
+	col := r.Col
+	entry := r.Entry
+	if r.Node != nil {
+		entry = -1
+		row = t.self.ID.CommonPrefixLen(r.Node.ID)
+		if row > len(r.Node.ID) {
+			return nil
+		}
+		col = int(r.Node.ID[row].Canonical())
+		if col > len(t.nodes[row]) {
+			return nil
+		}
+		for i, n := range t.nodes[row][col] {
+			if n.ID.Equals(r.Node.ID) {
+				entry = i
+			}
+		}
+		if entry < 0 {
+			return nil
+		}
 	}
-	return nil
+	if row >= len(t.nodes) {
+		return nil
+	}
+	if col >= len(t.nodes[row]) {
+		return nil
+	}
+	if entry >= len(t.nodes[row][col]) {
+		return nil
+	}
+	return &routingTableRequest{Row: row, Col: col, Entry: entry, Mode: GET, Node: t.nodes[row][col][entry]}
 }
 
-// removeNode is the low-level implementation of Node removal. It takes care of the actual removal of Nodes, creation of the routingTableRequest, and returns the response channel.
-func (t *RoutingTable) removeNode(row, col, entry int) chan *Node {
-	resp := make(chan *Node)
-	t.req <- routingTableRequest{row: row, col: col, entry: entry, resp: resp, del: true}
+// Remove removes a Node from the RoutingTable. If no Node is passed, the row, column, and position arguments determine which Node to remove.
+//
+// Remove returns a populated routingTableRequest object or a TimeoutError. If both returns are nil, the Node to be removed was not in the RoutingTable at the time of the request.
+//
+// Remove is a concurrency-safe method, and will return a TimeoutError if it is blocked for more than one second.
+func (t *RoutingTable) Remove(node *Node, row, col, entry int) (*routingTableRequest, error) {
+	resp := make(chan *routingTableRequest)
+	t.req <- &routingTableRequest{Row: row, Col: col, Entry: entry, Node: node, Mode: DEL, resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Node removal", 1)
+	}
+	return nil, nil
+}
+
+// remove does the actual low-level removal of a Node from the RoutingTable. It should *only* ever be called from the RoutingTable's listen method, to preserve its concurrency-safe property.
+func (t *RoutingTable) remove(r *routingTableRequest) *routingTableRequest {
+	row := r.Row
+	col := r.Col
+	entry := r.Entry
+	if r.Node != nil {
+		entry = -1
+		row = t.self.ID.CommonPrefixLen(r.Node.ID)
+		if row > len(r.Node.ID) {
+			return nil
+		}
+		col = int(r.Node.ID[row].Canonical())
+		if col > len(t.nodes[row]) {
+			return nil
+		}
+		for i, n := range t.nodes[row][col] {
+			if n.ID.Equals(r.Node.ID) {
+				entry = i
+			}
+		}
+		if entry < 0 {
+			return nil
+		}
+	}
+	if len(t.nodes[row][col]) < entry+1 {
+		return nil
+	}
+	if len(t.nodes[row][col]) == 1 {
+		resp := &routingTableRequest{Node: t.nodes[row][col][0], Row: row, Col: col, Entry: 0, Mode: DEL}
+		t.nodes[row][col] = []*Node{}
+		return resp
+	}
+	if entry+1 == len(t.nodes[row][col]) {
+		resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: DEL}
+		t.nodes[row][col] = t.nodes[row][col][:entry]
+		return resp
+	}
+	if entry == 0 {
+		resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: DEL}
+		t.nodes[row][col] = t.nodes[row][col][1:]
+		return resp
+	}
+	resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: DEL}
+	t.nodes[row][col] = append(t.nodes[row][col][:entry], t.nodes[row][col][entry+1:]...)
 	return resp
 }
 
@@ -158,57 +284,35 @@ func (t *RoutingTable) listen() {
 	for {
 	loop:
 		select {
-		case n := <-t.input:
-			row := t.self.ID.CommonPrefixLen(n.ID)
-			col := int(n.ID[row].Canonical())
-			if t.nodes[row][col] == nil {
-				t.nodes[row][col] = []*Node{}
-			}
-			for i, node := range t.nodes[row][col] {
-				if node.ID.Equals(n.ID) {
-					t.nodes[row][col][i] = node
-					break loop
-				}
-			}
-			t.nodes[row][col] = append(t.nodes[row][col], n)
-			break loop
 		case r := <-t.req:
-			if r.row > 31 {
-				fmt.Println("Invalid row input: %d", r.row)
-				r.resp <- nil
-				break loop
-			}
-			if r.col > 15 {
-				fmt.Println("Invalid col input: %d", r.col)
-				r.resp <- nil
-				break loop
-			}
-			if r.entry > len(t.nodes[r.row][r.col])-1 {
-				fmt.Println("Invalid entry input: %d", r.entry)
-				r.resp <- nil
-				break loop
-			}
-			if r.del {
-				if len(t.nodes[r.row][r.col]) == 1 {
-					t.nodes[r.row][r.col] = []*Node{}
+			if r.Node == nil {
+				if r.Row >= len(t.nodes) {
+					fmt.Println("Invalid row input: %d", r.Row)
 					r.resp <- nil
 					break loop
 				}
-				if r.entry+1 == len(t.nodes[r.row][r.col]) {
-					t.nodes[r.row][r.col] = t.nodes[r.row][r.col][:r.entry]
+				if r.Col >= len(t.nodes[r.Row]) {
+					fmt.Println("Invalid col input: %d", r.Col)
 					r.resp <- nil
 					break loop
 				}
-				if r.entry == 0 {
-					t.nodes[r.row][r.col] = t.nodes[r.row][r.col][1:]
+				if r.Entry >= len(t.nodes[r.Row][r.Col]) {
+					fmt.Println("Invalid entry input: %d", r.Entry)
 					r.resp <- nil
 					break loop
 				}
-				t.nodes[r.row][r.col] = append(t.nodes[r.row][r.col][:r.entry], t.nodes[r.row][r.col][r.entry+1:]...)
-				r.resp <- nil
+			}
+			switch r.Mode {
+			case SET:
+				r.resp <- t.insert(r)
+				break loop
+			case GET:
+				r.resp <- t.get(r)
+				break loop
+			case DEL:
+				r.resp <- t.remove(r)
 				break loop
 			}
-			r.resp <- t.nodes[r.row][r.col][r.entry]
 			break loop
 		case <-t.kill:
 			return

@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// Test insertion and retrieval of nodes in the routing table
-func TestRoutingTableGetSet(t *testing.T) {
+// Test insertion of a node into the routing table
+func TestRoutingTableInsert(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -28,21 +28,23 @@ func TestRoutingTableGetSet(t *testing.T) {
 	table := NewRoutingTable(self)
 	go table.listen()
 	defer table.Stop()
-	table.Insert(other)
-	node, err := table.GetNode(row, int(col), 0)
+	r, err := table.Insert(other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	if node == nil {
-		t.Fatalf("Nil Node returned.")
+	if r == nil {
+		t.Fatalf("Nil response returned.")
 	}
-	if !node.ID.Equals(other_id) {
-		t.Errorf("Expected node ID of %s, got %s instead.", node.ID, other_id)
+	if r.Row != row {
+		t.Errorf("Expected node to be in row %d, was put in %d instead.", row, r.Row)
+	}
+	if r.Col != int(col) {
+		t.Errorf("Expected node to be in column %d, was put in %d instead.", int(col), r.Col)
 	}
 }
 
 // Test handling of a Node being inserted twice.
-func TestRoutingTableDoubleSet(t *testing.T) {
+func TestRoutingTableDoubleInsert(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -54,34 +56,39 @@ func TestRoutingTableDoubleSet(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	row := self_id.CommonPrefixLen(other_id)
-	col := other_id[row].Canonical()
 	table := NewRoutingTable(self)
 	go table.listen()
 	defer table.Stop()
-	table.Insert(other)
-	table.Insert(other)
-	node, err := table.GetNode(row, int(col), 0)
+	r, err := table.Insert(other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	if node == nil {
-		t.Fatalf("Nil Node returned.")
+	if r == nil {
+		t.Fatalf("First insert returned a nil response.")
 	}
-	if !node.ID.Equals(other_id) {
-		t.Errorf("Expected node ID of %s, got %s instead.", node.ID, other_id)
-	}
-	second_node, err := table.GetNode(row, int(col), 1)
+	r2, err := table.Insert(other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	if second_node != nil {
-		t.Errorf("Expected nil node, got %s instead.", second_node.ID)
+	if r2 == nil {
+		t.Fatalf("Second insert returned a nil response.")
+	}
+	if r.Row != r2.Row {
+		t.Errorf("Rows expected to be equal. %d != %d", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Errorf("Columns expected to be equal. %d != %d", r.Col, r2.Col)
+	}
+	if r.Entry != r2.Entry {
+		t.Errorf("Entries expected to be equal. %d != %d", r.Entry, r2.Entry)
 	}
 }
 
-// Test deleting the only node from column of the routing table
-func TestRoutingTableDeleteOnly(t *testing.T) {
+// TODO: Test getting a Node by its ID
+// TODO: Test getting a Node by its position
+
+// Test deleting the only node from column of the routing table using its position
+func TestRoutingTableDeleteOnlyByPos(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -93,39 +100,37 @@ func TestRoutingTableDeleteOnly(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	row := self_id.CommonPrefixLen(other_id)
-	col := other_id[row].Canonical()
 	table := NewRoutingTable(self)
 	go table.listen()
 	defer table.Stop()
-	table.Insert(other)
-	node, err := table.GetNode(row, int(col), 0)
+	r, err := table.Insert(other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	if node == nil {
-		t.Fatalf("Nil Node returned.")
+	if r == nil {
+		t.Fatalf("Nil response returned.")
 	}
-	if !node.ID.Equals(other_id) {
-		t.Fatalf("Expected node ID of %s, got %s instead.", node.ID, other_id)
-	}
-
-	err = table.RemoveNode(row, int(col), 0)
+	_, err = table.Remove(nil, r.Row, r.Col, r.Entry)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	node, err = table.GetNode(row, int(col), 0)
+	r3, err := table.Get(nil, r.Row, r.Col, r.Entry)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	if node != nil {
-		t.Errorf("Expected nil response, got Node %s instead.", node.ID)
+	if r3 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r.Node.ID)
 	}
 }
 
-// TODO: Need to test deleting from the front of the entries list
-// TODO: Need to test deleting from the end of the entries list
-// TODO: Need to test deleting from the middle of the entries list
+// TODO: Need to test deleting the only Node using the ID
+
+// TODO: Need to test deleting from the front of the entries list using the position
+// TODO: Need to test deleting from the front of the entries list using the ID
+// TODO: Need to test deleting from the end of the entries list using the position
+// TODO: Need to test deleting from the end of the entries list using the ID
+// TODO: Need to test deleting from the middle of the entries list using the position
+// TODO: Need to test deleting from the middle of the entries list using the ID
 
 // Benchmarks
 
@@ -152,6 +157,9 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 			b.Fatalf(err.Error())
 		}
 		other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-		table.Insert(other)
+		_, err = table.Insert(other)
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
 	}
 }
