@@ -231,8 +231,140 @@ func TestRoutingTableDeleteOnlyByID(t *testing.T) {
 	}
 }
 
-// TODO: Need to test deleting from the front of the entries list using the position
-// TODO: Need to test deleting from the front of the entries list using the ID
+// Test deleting the first of two nodes from a column of the routing table using its position
+func TestRoutingTableDeleteFirstByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+	r, err := table.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
+	}
+	if r2.Entry != 1 {
+		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
+	}
+	_, err = table.Remove(nil, r.Row, r.Col, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := table.Get(r.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r.Node.ID)
+	}
+	r4, err := table.Get(r2.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 == nil {
+		t.Fatalf("Got nil response when querying for second insert.")
+	}
+	if r4.Entry != 0 {
+		t.Errorf("Expected second insert to be in position 0, got %v instead.", r4.Entry)
+	}
+}
+
+// Test deleting the first of two nodes from a column of the routing table using its ID
+func TestRoutingTableDeleteFirstByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+	r, err := table.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
+	}
+	if r2.Entry != 1 {
+		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
+	}
+	_, err = table.Remove(r.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := table.Get(r.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r.Node.ID)
+	}
+	r4, err := table.Get(r2.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 == nil {
+		t.Fatalf("Got nil response when querying for second insert.")
+	}
+	if r4.Entry != 0 {
+		t.Errorf("Expected second insert to be in position 0, got %v instead.", r4.Entry)
+	}
+}
+
 // TODO: Need to test deleting from the end of the entries list using the position
 // TODO: Need to test deleting from the end of the entries list using the ID
 // TODO: Need to test deleting from the middle of the entries list using the position
