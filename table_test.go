@@ -499,8 +499,201 @@ func TestRoutingTableDeleteLastByID(t *testing.T) {
 	}
 }
 
-// TODO: Need to test deleting from the middle of the entries list using the position
-// TODO: Need to test deleting from the middle of the entries list using the ID
+// Test deleting the middle of multiple nodes from a column of the routing table using its position
+func TestRoutingTableDeleteMiddleByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	third_id, err := NodeIDFromBytes([]byte("1234557890accdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+	r, err := table.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
+	}
+	if r2.Entry != 1 {
+		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
+	}
+	r3, err := table.Insert(third)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r3.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r2.Row, r3.Row)
+	}
+	if r3.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r2.Col, r3.Col)
+	}
+	if r3.Entry != 2 {
+		t.Fatalf("Third insert didn't get added to the end of the column. Expected 2, got %v.", r3.Entry)
+	}
+	_, err = table.Remove(nil, r2.Row, r2.Col, 1)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r4, err := table.Get(r2.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r4 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+	r5, err := table.Get(r.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r5 == nil {
+		t.Fatalf("Got nil response when querying for first insert.")
+	}
+	if r5.Entry != 0 {
+		t.Errorf("Expected first insert to be in position 0, got %v instead.", r5.Entry)
+	}
+	r6, err := table.Get(r3.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r6 == nil {
+		t.Fatalf("Got nil response when querying for third insert.")
+	}
+	if r6.Entry != 1 {
+		t.Errorf("Expected third insert to be in position 1, got %v instead.", r6.Entry)
+	}
+}
+
+// Test deleting the middle of multiple nodes from a column of the routing table using its ID
+func TestRoutingTableDeleteMiddleByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	third_id, err := NodeIDFromBytes([]byte("1234557890accdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+	r, err := table.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
+	}
+	if r2.Entry != 1 {
+		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
+	}
+	r3, err := table.Insert(third)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r3.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r2.Row, r3.Row)
+	}
+	if r3.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r2.Col, r3.Col)
+	}
+	if r3.Entry != 2 {
+		t.Fatalf("Third insert didn't get added to the end of the column. Expected 2, got %v.", r3.Entry)
+	}
+	_, err = table.Remove(r2.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r4, err := table.Get(r2.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r4 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+	r5, err := table.Get(r.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r5 == nil {
+		t.Fatalf("Got nil response when querying for first insert.")
+	}
+	if r5.Entry != 0 {
+		t.Errorf("Expected first insert to be in position 0, got %v instead.", r5.Entry)
+	}
+	r6, err := table.Get(r3.Node, 0, 0, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r6 == nil {
+		t.Fatalf("Got nil response when querying for third insert.")
+	}
+	if r6.Entry != 1 {
+		t.Errorf("Expected third insert to be in position 1, got %v instead.", r6.Entry)
+	}
+}
 
 // Benchmarks
 
