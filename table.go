@@ -30,7 +30,7 @@ type reqMode int
 const SET = reqMode(0)
 const GET = reqMode(1)
 const DEL = reqMode(2)
-const PRX = reqMode(4)
+const PRX = reqMode(3)
 
 // routingTableRequest is a request for a specific Node in the routing table. The Node field determines the Node being queried against. Should it not be set, the Row/Col/Entry fields are used in its stead.
 //
