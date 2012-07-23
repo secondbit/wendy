@@ -159,6 +159,77 @@ func TestRoutingTableGetByPos(t *testing.T) {
 	}
 }
 
+// Test retrieving nodes by proximity
+func TestRoutingTableGetClosestByProximity(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	other_id, err := NodeIDFromBytes([]byte("1234467890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing2", 55555)
+	other.proximity = 10
+	second_id, err := NodeIDFromBytes([]byte("1234467890abbdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second.proximity = 1
+	r, err := table.Insert(other)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("First insert returned a nil response.")
+	}
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Second insert returned a nil response.")
+	}
+	if r.Row != r2.Row {
+		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
+	}
+	if r2.Entry != 1 {
+		t.Fatalf("Second insert was inserted in correct position. Expected table[%v][%v][1], got table[%v][%v][%v].", r.Row, r.Col, r2.Row, r2.Col, r2.Entry)
+	}
+	t.Logf("First insert proximity: %v", table.self.Proximity(other))
+	t.Logf("Second insert proximity: %v", table.self.Proximity(second))
+	r3, err := table.GetByProximity(r.Row, r.Col, 0)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Returned nil response.")
+	}
+	if !r3.Node.ID.Equals(second_id) {
+		t.Errorf("Expected node ID of %s, got %s instead.", second_id, r3.Node.ID)
+	}
+	r4, err := table.GetByProximity(r.Row, r.Col, 1)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 == nil {
+		t.Fatal("Returned nil response.")
+	}
+	if !r4.Node.ID.Equals(other_id) {
+		t.Errorf("Expected node ID of %s, got %s instead.", other_id, r4.Node.ID)
+	}
+}
+
 // Test deleting the only node from column of the routing table using its position
 func TestRoutingTableDeleteOnlyByPos(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))

@@ -14,7 +14,7 @@ type TimeoutError struct {
 
 // Error returns the TimeoutError as a string and fulfills the error interface.
 func (t TimeoutError) Error() string {
-	return fmt.Sprintf("Timeout error: %s took more than %d seconds.", t.Action, t.Timeout)
+	return fmt.Sprintf("Timeout error: %s took more than %v seconds.", t.Action, t.Timeout)
 }
 
 // throwTimeout creates a new TimeoutError from the action and timeout specified.
@@ -30,6 +30,7 @@ type reqMode int
 const SET = reqMode(0)
 const GET = reqMode(1)
 const DEL = reqMode(2)
+const PRX = reqMode(4)
 
 // routingTableRequest is a request for a specific Node in the routing table. The Node field determines the Node being queried against. Should it not be set, the Row/Col/Entry fields are used in its stead.
 //
@@ -70,7 +71,7 @@ func NewNode(id NodeID, local, global, region string, port int) *Node {
 }
 
 // Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
-func (n *Node) Proximity(self *Node) int64 {
+func (self *Node) Proximity(n *Node) int64 {
 	n.mutex.Lock()
 	if n == nil {
 		return -1
@@ -218,6 +219,56 @@ func (t *RoutingTable) get(r *routingTableRequest) *routingTableRequest {
 	return &routingTableRequest{Row: row, Col: col, Entry: entry, Mode: GET, Node: t.nodes[row][col][entry]}
 }
 
+// GetByProximity retrieves a Node from the RoutingTable based on its proximity score. Nodes will be ordered by their Proximity scores, lowest first, before selecting the entry from the specified row and column.
+//
+// GetByProximity returns a populated routingTableRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results.
+//
+// GetByProximity is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocekd for more than one second.
+func (t *RoutingTable) GetByProximity(row, col, entry int) (*routingTableRequest, error) {
+	resp := make(chan *routingTableRequest)
+	t.req <- &routingTableRequest{Node: nil, Row: row, Col: col, Entry: entry, Mode: PRX, resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Node retrieval by proximity", 1)
+	}
+	return nil, nil
+}
+
+// proximity does the actual low-level retrieval of a Node from the RoutingTable based on its proximity. It should *only* ever be called from the RoutingTable's listen method, to preserve its concurrency-safe property.
+func (t *RoutingTable) proximity(r *routingTableRequest) *routingTableRequest {
+	if r.Row >= len(t.nodes) {
+		return nil
+	}
+	if r.Col >= len(t.nodes[r.Row]) {
+		return nil
+	}
+	if r.Entry > len(t.nodes[r.Row][r.Col]) {
+		return nil
+	}
+	entry := -1
+	proximity := int64(-1)
+	prev_prox := int64(-1)
+	for x := 0; x <= r.Entry; x++ {
+		entry = -1
+		for i, n := range t.nodes[r.Row][r.Col] {
+			if entry == -1 {
+				entry = i
+				proximity = t.self.Proximity(n)
+				continue
+			}
+			p := t.self.Proximity(n)
+			if p < proximity && p >= prev_prox {
+				entry = i
+				prev_prox = proximity
+				proximity = p
+			}
+		}
+	}
+	return &routingTableRequest{Row: r.Row, Col: r.Col, Entry: entry, Mode: PRX, Node: t.nodes[r.Row][r.Col][entry]}
+}
+
 // Remove removes a Node from the RoutingTable. If no Node is passed, the row, column, and position arguments determine which Node to remove.
 //
 // Remove returns a populated routingTableRequest object or a TimeoutError. If both returns are nil, the Node to be removed was not in the RoutingTable at the time of the request.
@@ -290,17 +341,17 @@ func (t *RoutingTable) listen() {
 		case r := <-t.req:
 			if r.Node == nil {
 				if r.Row >= len(t.nodes) {
-					fmt.Println("Invalid row input: %d", r.Row)
+					fmt.Printf("Invalid row input: %v, max is %v.\n", r.Row, len(t.nodes)-1)
 					r.resp <- nil
 					break loop
 				}
 				if r.Col >= len(t.nodes[r.Row]) {
-					fmt.Println("Invalid col input: %d", r.Col)
+					fmt.Printf("Invalid col input: %v, max is %v.\n", r.Col, len(t.nodes[r.Row])-1)
 					r.resp <- nil
 					break loop
 				}
 				if r.Entry >= len(t.nodes[r.Row][r.Col]) {
-					fmt.Println("Invalid entry input: %d", r.Entry)
+					fmt.Printf("Invalid entry input: %v, max is %v.\n", r.Entry, len(t.nodes[r.Row][r.Col])-1)
 					r.resp <- nil
 					break loop
 				}
@@ -314,6 +365,9 @@ func (t *RoutingTable) listen() {
 				break loop
 			case DEL:
 				r.resp <- t.remove(r)
+				break loop
+			case PRX:
+				r.resp <- t.proximity(r)
 				break loop
 			}
 			break loop
