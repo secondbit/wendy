@@ -855,3 +855,42 @@ func BenchmarkRoutingTableGetByPos(b *testing.B) {
 		table.Get(nil, r.Row, r.Col, r.Entry)
 	}
 }
+
+// How fast can we retrieve nodes by proximity
+func BenchmarkRoutingTableGetByProximity(b *testing.B) {
+	b.StopTimer()
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	reqs := []*routingTableRequest{}
+
+	for i := 0; i < b.N; i++ {
+		seed := strconv.FormatInt(time.Now().UnixNano()*int64(i+1), 10)
+		other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+		r, err := table.Insert(other)
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		reqs = append(reqs, r)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		req := 0
+		if len(reqs) > 1 {
+			req = i % (len(reqs) - 1)
+		}
+		r := reqs[req]
+		table.GetByProximity(r.Row, r.Col, 0)
+	}
+}
