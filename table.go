@@ -27,10 +27,11 @@ func throwTimeout(action string, timeout int) TimeoutError {
 
 type reqMode int
 
-const SET = reqMode(0)
-const GET = reqMode(1)
-const DEL = reqMode(2)
-const PRX = reqMode(3)
+const mode_set = reqMode(0)
+const mode_get = reqMode(1)
+const mode_del = reqMode(2)
+const mode_prx = reqMode(3)
+const mode_scan = reqMode(4)
 
 // routingTableRequest is a request for a specific Node in the routing table. The Node field determines the Node being queried against. Should it not be set, the Row/Col/Entry fields are used in its stead.
 //
@@ -130,7 +131,7 @@ func (t *RoutingTable) Stop() {
 // Insert is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocked for more than one second.
 func (t *RoutingTable) Insert(n *Node) (*routingTableRequest, error) {
 	resp := make(chan *routingTableRequest)
-	t.req <- &routingTableRequest{Node: n, Mode: SET, resp: resp}
+	t.req <- &routingTableRequest{Node: n, Mode: mode_set, resp: resp}
 	select {
 	case r := <-resp:
 		return r, nil
@@ -159,11 +160,11 @@ func (t *RoutingTable) insert(r *routingTableRequest) *routingTableRequest {
 	for i, node := range t.nodes[row][col] {
 		if node.ID.Equals(r.Node.ID) {
 			t.nodes[row][col][i] = node
-			return &routingTableRequest{Mode: SET, Node: node, Row: row, Col: col, Entry: i}
+			return &routingTableRequest{Mode: mode_set, Node: node, Row: row, Col: col, Entry: i}
 		}
 	}
 	t.nodes[row][col] = append(t.nodes[row][col], r.Node)
-	return &routingTableRequest{Mode: SET, Node: r.Node, Row: row, Col: col, Entry: len(t.nodes[row][col]) - 1}
+	return &routingTableRequest{Mode: mode_set, Node: r.Node, Row: row, Col: col, Entry: len(t.nodes[row][col]) - 1}
 }
 
 // Get retrieves a Node from the RoutingTable. If no Node (nil) is passed, the row, col, and entry arguments are used to select the node.
@@ -173,7 +174,7 @@ func (t *RoutingTable) insert(r *routingTableRequest) *routingTableRequest {
 // Get is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocekd for more than one second.
 func (t *RoutingTable) Get(node *Node, row, col, entry int) (*routingTableRequest, error) {
 	resp := make(chan *routingTableRequest)
-	t.req <- &routingTableRequest{Node: node, Row: row, Col: col, Entry: entry, Mode: GET, resp: resp}
+	t.req <- &routingTableRequest{Node: node, Row: row, Col: col, Entry: entry, Mode: mode_get, resp: resp}
 	select {
 	case r := <-resp:
 		return r, nil
@@ -216,7 +217,7 @@ func (t *RoutingTable) get(r *routingTableRequest) *routingTableRequest {
 	if entry >= len(t.nodes[row][col]) {
 		return nil
 	}
-	return &routingTableRequest{Row: row, Col: col, Entry: entry, Mode: GET, Node: t.nodes[row][col][entry]}
+	return &routingTableRequest{Row: row, Col: col, Entry: entry, Mode: mode_get, Node: t.nodes[row][col][entry]}
 }
 
 // GetByProximity retrieves a Node from the RoutingTable based on its proximity score. Nodes will be ordered by their Proximity scores, lowest first, before selecting the entry from the specified row and column.
@@ -226,7 +227,7 @@ func (t *RoutingTable) get(r *routingTableRequest) *routingTableRequest {
 // GetByProximity is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocekd for more than one second.
 func (t *RoutingTable) GetByProximity(row, col, entry int) (*routingTableRequest, error) {
 	resp := make(chan *routingTableRequest)
-	t.req <- &routingTableRequest{Node: nil, Row: row, Col: col, Entry: entry, Mode: PRX, resp: resp}
+	t.req <- &routingTableRequest{Node: nil, Row: row, Col: col, Entry: entry, Mode: mode_prx, resp: resp}
 	select {
 	case r := <-resp:
 		return r, nil
@@ -266,7 +267,72 @@ func (t *RoutingTable) proximity(r *routingTableRequest) *routingTableRequest {
 			}
 		}
 	}
-	return &routingTableRequest{Row: r.Row, Col: r.Col, Entry: entry, Mode: PRX, Node: t.nodes[r.Row][r.Col][entry]}
+	return &routingTableRequest{Row: r.Row, Col: r.Col, Entry: entry, Mode: mode_prx, Node: t.nodes[r.Row][r.Col][entry]}
+}
+
+// Scan retrieves the first Node from the RoutingTable whose NodeID is closer to the passed NodeID than the current Node's NodeID. If there is a tie between two columns in the RoutingTable, the lower column will be used. If there are multiple Nodes in the selected column, the closest Node (based on proximity) will be returned.
+//
+// Scan returns a populated routingTableRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results.
+//
+// Scan is a concurrency-safe method, and will return a TimeoutError if the routingTableRequest is blocekd for more than one second.
+func (t *RoutingTable) Scan(id NodeID) (*routingTableRequest, error) {
+	resp := make(chan *routingTableRequest)
+	node := &Node{ID: id}
+	t.req <- &routingTableRequest{Node: node, Mode: mode_scan, resp: resp}
+	select {
+	case r := <-resp:
+		if r == nil {
+			return nil, nil
+		}
+		if r.Node != nil {
+			return r, nil
+		}
+		return t.GetByProximity(r.Row, r.Col, 0)
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Routing table scan", 1)
+	}
+	return nil, nil
+}
+
+// scan does the actual low-level retrieval of a Node from the RoutingTable by scanning for a Node more appropriate than the current one. It should *only* ever be called from the RoutingTable's listen method, to preserve its concurrency-safe property.
+func (t *RoutingTable) scan(r *routingTableRequest) *routingTableRequest {
+	if r.Node == nil {
+		return nil
+	}
+	row := t.self.ID.CommonPrefixLen(r.Node.ID)
+	if row > len(r.Node.ID) {
+		return nil
+	}
+	col := int(r.Node.ID[row].Canonical())
+	diff := r.Node.ID.Diff(t.self.ID)
+	for scan_row := row; scan_row < len(t.nodes); scan_row++ {
+		for c, n := range t.nodes[scan_row] {
+			if c == col {
+				continue
+			}
+			if n == nil || len(n) < 1 {
+				continue
+			}
+			for _, node := range n {
+				if node == nil {
+					continue
+				}
+				if node.ID == nil {
+					continue
+				}
+				n_diff := node.ID.Diff(t.self.ID).Cmp(diff)
+				if n_diff == -1 || (n_diff == 0 && node.ID.Less(t.self.ID)) {
+					return_node := node
+					if len(n) == 1 {
+						return_node = nil
+					}
+					return &routingTableRequest{Row: scan_row, Col: c, Node: return_node, Mode: mode_scan}
+				}
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // Remove removes a Node from the RoutingTable. If no Node is passed, the row, column, and position arguments determine which Node to remove.
@@ -276,7 +342,7 @@ func (t *RoutingTable) proximity(r *routingTableRequest) *routingTableRequest {
 // Remove is a concurrency-safe method, and will return a TimeoutError if it is blocked for more than one second.
 func (t *RoutingTable) Remove(node *Node, row, col, entry int) (*routingTableRequest, error) {
 	resp := make(chan *routingTableRequest)
-	t.req <- &routingTableRequest{Row: row, Col: col, Entry: entry, Node: node, Mode: DEL, resp: resp}
+	t.req <- &routingTableRequest{Row: row, Col: col, Entry: entry, Node: node, Mode: mode_del, resp: resp}
 	select {
 	case r := <-resp:
 		return r, nil
@@ -314,23 +380,46 @@ func (t *RoutingTable) remove(r *routingTableRequest) *routingTableRequest {
 		return nil
 	}
 	if len(t.nodes[row][col]) == 1 {
-		resp := &routingTableRequest{Node: t.nodes[row][col][0], Row: row, Col: col, Entry: 0, Mode: DEL}
+		resp := &routingTableRequest{Node: t.nodes[row][col][0], Row: row, Col: col, Entry: 0, Mode: mode_del}
 		t.nodes[row][col] = []*Node{}
 		return resp
 	}
 	if entry+1 == len(t.nodes[row][col]) {
-		resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: DEL}
+		resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: mode_del}
 		t.nodes[row][col] = t.nodes[row][col][:entry]
 		return resp
 	}
 	if entry == 0 {
-		resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: DEL}
+		resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: mode_del}
 		t.nodes[row][col] = t.nodes[row][col][1:]
 		return resp
 	}
-	resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: DEL}
+	resp := &routingTableRequest{Node: t.nodes[row][col][entry], Row: row, Col: col, Entry: entry, Mode: mode_del}
 	t.nodes[row][col] = append(t.nodes[row][col][:entry], t.nodes[row][col][entry+1:]...)
 	return resp
+}
+
+// route is the logic that handles routing messages within the RoutingTable. Messages should never be routed with this method alone. Use the Message.Route method instead.
+func (t *RoutingTable) route(id NodeID) (*Node, error) {
+	row := t.self.ID.CommonPrefixLen(id)
+	col := int(id[row].Canonical())
+	r, err := t.GetByProximity(row, col, 0)
+	if err != nil {
+		return nil, err
+	}
+	if r != nil {
+		if r.Node != nil {
+			return r.Node, nil
+		}
+	}
+	r2, err := t.Scan(id)
+	if err != nil {
+		return nil, err
+	}
+	if r2 != nil {
+		return r2.Node, nil
+	}
+	return nil, nil
 }
 
 // listen is a low-level helper that will set the RoutingTable listening for requests and inserts. Passing a value to the RoutingTable's kill property will break the listen loop.
@@ -357,17 +446,20 @@ func (t *RoutingTable) listen() {
 				}
 			}
 			switch r.Mode {
-			case SET:
+			case mode_set:
 				r.resp <- t.insert(r)
 				break loop
-			case GET:
+			case mode_get:
 				r.resp <- t.get(r)
 				break loop
-			case DEL:
+			case mode_del:
 				r.resp <- t.remove(r)
 				break loop
-			case PRX:
+			case mode_prx:
 				r.resp <- t.proximity(r)
+				break loop
+			case mode_scan:
+				r.resp <- t.scan(r)
 				break loop
 			}
 			break loop
