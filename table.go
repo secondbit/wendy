@@ -99,7 +99,6 @@ func (self *Node) Proximity(n *Node) int64 {
 type RoutingTable struct {
 	self  *Node
 	nodes [32][16][]*Node
-	input chan *Node
 	req   chan *routingTableRequest
 	kill  chan bool
 }
@@ -107,13 +106,11 @@ type RoutingTable struct {
 // NewRoutingTable initialises a new RoutingTable along with all its corresponding channels.
 func NewRoutingTable(self *Node) *RoutingTable {
 	nodes := [32][16][]*Node{}
-	input := make(chan *Node)
 	req := make(chan *routingTableRequest)
 	kill := make(chan bool)
 	return &RoutingTable{
 		self:  self,
 		nodes: nodes,
-		input: input,
 		req:   req,
 		kill:  kill,
 	}
@@ -469,122 +466,25 @@ func (t *RoutingTable) listen() {
 	}
 }
 
-// Neighborhood contains the 32 closest Nodes to the current Node, based on the amount of time a request takes to complete (with a multiplier for Nodes in a different Region, in an attempt to keep requests within a Region).
-//
-// The Neighborhood is not used in routing, it is only maintained for ordering entries within columns of the RoutingTable.
-type Neighborhood struct {
-	nodes [32]*Node
-	self  *Node
-	input chan *Node
-	req   chan neighborhoodRequest
-	kill  chan bool
-}
-
-// neighborhoodRequest is a request for a specific Node in the Neighborhood. It is simply the position or ID of the Node that is to be retrieved, along with the channel that the Node or position is to be passed to when it has been retrieved.
-// If the position is specified, the response will be a Node. If the NodeID is specified, the response will be its position (or -1, if it's not in the Neighborhood).
-type neighborhoodRequest struct {
-	pos  int
-	id   NodeID
-	resp chan neighborhoodResponse
-}
-
-// neighborhoodResponse is a response from a neighborhoodRequest. It contains either the position or Node that the request resulted in.
-type neighborhoodResponse struct {
-	pos  int
-	node *Node
-}
-
-// Contains checks the Neighborhood to see if it contains a NodeID of n and returns a boolean.
-//
-// Contains is concurrency-safe, and returns a TimeoutError if the check is blocked for longer than 1 second.
-func (n *Neighborhood) Contains(node NodeID) (bool, error) {
-	select {
-	case c := <-n.contains(node):
-		if c.pos < 0 {
-			return false, nil
-		} else {
-			return true, nil
-		}
-	case <-time.After(1 * time.Second):
-		return false, throwTimeout("Neighborhood check", 1)
-	}
-	return false, nil
-}
-
-// contains is a low-level function that actually checks the Neighborhood for a NodeID.
-// It takes care of the construction of the channels that communicate and the request to the Neighborhood.
-func (n *Neighborhood) contains(node NodeID) chan neighborhoodResponse {
-	resp := make(chan neighborhoodResponse)
-	n.req <- neighborhoodRequest{id: node, pos: -1, resp: resp}
-	return resp
-}
-
-// listen is a low-level helper that will set the Neighborhood listening for requests and inserts. Passing a value to the Neighborhood's kill property will break the listen loop.
-func (n *Neighborhood) listen() {
-	for {
-	loop:
-		select {
-		case node := <-n.input:
-			fmt.Printf("%s", node.ID)
-			loser := -1
-			for i, v := range n.nodes {
-				if loser < 0 {
-					loser = i
-					break
-				}
-				if v.Proximity(n.self) < 0 {
-					loser = i
-					break
-				}
-				if v.Proximity(n.self) > n.nodes[loser].Proximity(n.self) {
-					loser = i
-				}
-			}
-			n.nodes[loser] = node
-			break loop
-		case r := <-n.req:
-			if r.id != nil {
-				for i, v := range n.nodes {
-					if v.ID.Equals(r.id) {
-						r.resp <- neighborhoodResponse{pos: i, node: v}
-						break loop
-					}
-				}
-			} else {
-				if r.pos >= 0 && r.pos < 32 {
-					r.resp <- neighborhoodResponse{node: n.nodes[r.pos], pos: r.pos}
-				} else {
-					r.resp <- neighborhoodResponse{node: nil, pos: -1}
-				}
-			}
-			break loop
-		case <-n.kill:
-			return
-		}
-	}
-}
-
 // LeafSet contains the 32 closest Nodes to the current Node, based on the numerical proximity of their NodeIDs.
 //
 // The LeafSet is divided into Left and Right; the NodeID space is considered to be circular and thus wraps around. Left contains NodeIDs less than the current NodeID. Right contains NodeIDs greater than the current NodeID.
 type LeafSet struct {
 	left  [16]*Node
 	right [16]*Node
-	input chan *Node
-	req   chan leafSetRequest
+	self  *Node
+	req   chan *leafSetRequest
 	kill  chan bool
 }
 
-// leafSetRequest is a request for a specific Node in the LeafSet. It is simply the position or ID of the Node that is to be retrieved, along with the channel that the Node or ID is to be passed to when it has been retrieved.
-// If the position is specified, the response will be a Node. If the ID is specified, the response will be the Node's position, or 0 if it is absent. A negative position indicates it is to the left of the Node. A positive position indicates it is to the right of the Node.
+// leafSetRequest is a request for a specific Node in the LeafSet. The Node field determines the Node being queried against. Should it not be set, the Pos field is used in its stead, with a negative Pos signifying the Nodes with NodeIDs less than the current Node nad a positive Pos signifying the Nodes with NodeIDs greater than the current Node.
+//
+//The Mode field is used to determine whether the request is to insert, get, or remove the Node from the LeafSet.
+//
+// Methods that return a routingTableRequest will always do their best to fully populate it, meaning the result can be used to, for example, determine the position of a Node.
 type leafSetRequest struct {
-	pos  int
-	id   NodeID
-	resp chan leafSetResponse
-}
-
-// leafSetResponse is a response from a leafSetRequest. It contains either the position or Node that the request resulted in.
-type leafSetResponse struct {
-	pos  int
-	node *Node
+	Pos  int
+	Node *Node
+	resp chan *leafSetRequest
+	Mode reqMode
 }
