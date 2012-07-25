@@ -320,7 +320,7 @@ func (t *RoutingTable) scan(r *routingTableRequest) *routingTableRequest {
 				n_diff := node.ID.Diff(t.self.ID).Cmp(diff)
 				if n_diff == -1 || (n_diff == 0 && node.ID.Less(t.self.ID)) {
 					return_node := node
-					if len(n) == 1 {
+					if len(n) != 1 {
 						return_node = nil
 					}
 					return &routingTableRequest{Row: scan_row, Col: c, Node: return_node, Mode: mode_scan}
