@@ -766,6 +766,88 @@ func TestRoutingTableDeleteMiddleByID(t *testing.T) {
 	}
 }
 
+// Test scanning a row in the routing table when the key falls in between two nodes
+func TestRoutingTableScanSplit(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234560890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("12345667890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := table.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("First insert returned nil.")
+	}
+	second_id, err := NodeIDFromBytes([]byte("12345647890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Second insert returned nil")
+	}
+	message_id, err := NodeIDFromBytes([]byte("12345657890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	d1 := message_id.Diff(first_id)
+	d2 := message_id.Diff(second_id)
+	if d1.Cmp(d2) != 0 {
+		t.Fatalf("IDs not equidistant. Expected %s, got %s.", d1, d2)
+	}
+	r3, err := table.Scan(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Scan returned nil.")
+	}
+	if !second_id.Equals(r3.Node.ID) {
+		t.Errorf("Wrong Node returned. Expected %s, got %s.", second_id, r3.Node.ID)
+	}
+}
+
+// Test scanning a row in the routing table when there are no suitable matches
+func TestRoutingTableScanNone(t *testing.T) {
+}
+
+// Test scanning a row in the routing table when there are multiple Nodes in the column
+func TestRoutingTableScanMultipleEntries(t *testing.T) {
+}
+
+func TestRoutingTableScanMultipleRows(t *testing.T) {
+}
+
+// Test routing to the only node in the routing table
+func TestRoutingTableRouteOnly(t *testing.T) {
+}
+
+// Test routing to a direct match in the routing table
+func TestRoutingTableRouteMatch(t *testing.T) {
+}
+
+// Test routing when there are no suitable routing table matches
+func TestRoutingTableRouteNone(t *testing.T) {
+}
+
+
+
 // Benchmarks
 
 // How fast can we insert nodes
