@@ -300,11 +300,10 @@ func (t *RoutingTable) scan(r *routingTableRequest) *routingTableRequest {
 	if row > len(r.Node.ID) {
 		return nil
 	}
-	col := int(r.Node.ID[row].Canonical())
 	diff := r.Node.ID.Diff(t.self.ID)
 	for scan_row := row; scan_row < len(t.nodes); scan_row++ {
 		for c, n := range t.nodes[scan_row] {
-			if c == col {
+			if c == int(t.self.ID[row].Canonical()) {
 				continue
 			}
 			if n == nil || len(n) < 1 {

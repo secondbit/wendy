@@ -766,7 +766,7 @@ func TestRoutingTableDeleteMiddleByID(t *testing.T) {
 	}
 }
 
-// Test scanning a row in the routing table when the key falls in between two nodes
+// Test scanning the routing table when the key falls in between two nodes
 func TestRoutingTableScanSplit(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("1234560890abcdef"))
 	if err != nil {
@@ -778,7 +778,7 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	go table.listen()
 	defer table.Stop()
 
-	first_id, err := NodeIDFromBytes([]byte("12345667890abcde"))
+	first_id, err := NodeIDFromBytes([]byte("12345677890abcde"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -790,7 +790,7 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	if r == nil {
 		t.Fatal("First insert returned nil.")
 	}
-	second_id, err := NodeIDFromBytes([]byte("12345647890abcde"))
+	second_id, err := NodeIDFromBytes([]byte("12345637890abcde"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -823,14 +823,114 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	}
 }
 
-// Test scanning a row in the routing table when there are no suitable matches
+// Test scanning the routing table when there are no suitable matches
 func TestRoutingTableScanNone(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234560890abcdeg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("12345657890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	row := self_id.CommonPrefixLen(first_id)
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := table.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234560890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	m_row := message_id.CommonPrefixLen(self_id)
+	if row >= m_row {
+		t.Fatalf("Node would be picked up by scan.")
+	}
+	r3, err := table.Scan(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 != nil {
+		t.Errorf("Scan was supposed to return nil, returned %s instead.", r3.Node.ID)
+	}
 }
 
-// Test scanning a row in the routing table when there are multiple Nodes in the column
+// Test scanning the routing table when there are multiple Nodes in the column
 func TestRoutingTableScanMultipleEntries(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234560890abcdge"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("12345657890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing2", 55555)
+	first.proximity = 10
+	r, err := table.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+
+	second_id, err := NodeIDFromBytes([]byte("12345657890abcdf"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second.proximity = 1
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Second insert returned nil.")
+	}
+	if r.Row != r2.Row {
+		t.Fatalf("Second was supposed to be in row %v, was put in row %v instead.", r.Row, r2.Row)
+	}
+	if r.Col != r2.Col {
+		t.Fatalf("Second was supposed to be in column %v, was put in column %v instead.", r.Col, r2.Col)
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	m_row := message_id.CommonPrefixLen(self_id)
+	if r.Row < m_row {
+		t.Fatalf("Node wouldn't be picked up by scan.")
+	}
+	r3, err := table.Scan(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatalf("Scan returned nil.")
+	}
+	if !r3.Node.ID.Equals(second_id) {
+		t.Errorf("Scan was supposed to return %s, returned %s instead.", second_id, r3.Node.ID)
+	}
 }
 
+// Test scanning over multiple rows in the routing table
 func TestRoutingTableScanMultipleRows(t *testing.T) {
 }
 
@@ -846,9 +946,9 @@ func TestRoutingTableRouteMatch(t *testing.T) {
 func TestRoutingTableRouteNone(t *testing.T) {
 }
 
-
-
-// Benchmarks
+//////////////////////////////////////////////////////////////////////////
+////////////////////////// Benchmarks ////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
 
 // How fast can we insert nodes
 func BenchmarkRoutingTableInsert(b *testing.B) {
