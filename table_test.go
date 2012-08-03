@@ -932,6 +932,62 @@ func TestRoutingTableScanMultipleEntries(t *testing.T) {
 
 // Test scanning over multiple rows in the routing table
 func TestRoutingTableScanMultipleRows(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890abdefg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := table.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+
+	second_id, err := NodeIDFromBytes([]byte("1234567890abcdff"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r2, err := table.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Second insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890aaaaaaa"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	m_row := message_id.CommonPrefixLen(self_id)
+	if r.Row < m_row || r2.Row < m_row {
+		t.Fatalf("Node wouldn't be picked up by scan.")
+	}
+	if r.Row == m_row || r2.Row == m_row {
+		t.Fatalf("Node inserted into the same row.\nNode one: %d\nNode two: %d\nMessage: %d\n", r.Row, r2.Row, m_row)
+	}
+	r3, err := table.Scan(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatalf("Scan returned nil.")
+	}
+	if !r3.Node.ID.Equals(first_id) {
+		t.Errorf("Scan was supposed to return %s, returned %s instead.", first_id, r3.Node.ID)
+	}
 }
 
 // Test routing to the only node in the routing table
