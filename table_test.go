@@ -992,6 +992,50 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 
 // Test routing to the only node in the routing table
 func TestRoutingTableRouteOnly(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdeg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	row := self_id.CommonPrefixLen(first_id)
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := table.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890adefgh"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	m_row := message_id.CommonPrefixLen(self_id)
+	if row < m_row {
+		t.Fatalf("Node wouldn't be picked up by routing.")
+	}
+	r3, err := table.route(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Route returned nil.")
+	}
+	if r3 == nil {
+		t.Fatal("Route returned nil Node.")
+	}
+	if !r3.ID.Equals(first_id) {
+		t.Fatalf("Expected Node %s, got Node %s instead.", first_id, r3.ID)
+	}
 }
 
 // Test routing to a direct match in the routing table
