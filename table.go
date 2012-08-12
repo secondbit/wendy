@@ -2,36 +2,8 @@ package pastry
 
 import (
 	"fmt"
-	"sync"
 	"time"
 )
-
-// TimeoutError represents an error that was raised when a call has taken too long. It is its own type for the purposes of handling the error.
-type TimeoutError struct {
-	Action  string
-	Timeout int
-}
-
-// Error returns the TimeoutError as a string and fulfills the error interface.
-func (t TimeoutError) Error() string {
-	return fmt.Sprintf("Timeout error: %s took more than %v seconds.", t.Action, t.Timeout)
-}
-
-// throwTimeout creates a new TimeoutError from the action and timeout specified.
-func throwTimeout(action string, timeout int) TimeoutError {
-	return TimeoutError{
-		Action:  action,
-		Timeout: timeout,
-	}
-}
-
-type reqMode int
-
-const mode_set = reqMode(0)
-const mode_get = reqMode(1)
-const mode_del = reqMode(2)
-const mode_prx = reqMode(3)
-const mode_scan = reqMode(4)
 
 // routingTableRequest is a request for a specific Node in the routing table. The Node field determines the Node being queried against. Should it not be set, the Row/Col/Entry fields are used in its stead.
 //
@@ -45,45 +17,6 @@ type routingTableRequest struct {
 	Mode  reqMode
 	Node  *Node
 	resp  chan *routingTableRequest
-}
-
-// Node represents a specific server in the cluster.
-type Node struct {
-	LocalIP   string // The IP through which the Node should be accessed by other Nodes with an identical Region
-	GlobalIP  string // The IP through which the Node should be accessed by other Nodes whose Region differs
-	Port      int    // The port the Node is listening on
-	Region    string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
-	ID        NodeID
-	proximity int64       // The raw proximity score for the Node, not adjusted for Region
-	mutex     *sync.Mutex // lock and unlock a Node for concurrency safety
-}
-
-// NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
-func NewNode(id NodeID, local, global, region string, port int) *Node {
-	return &Node{
-		ID:        id,
-		LocalIP:   local,
-		GlobalIP:  global,
-		Port:      port,
-		Region:    region,
-		proximity: 0,
-		mutex:     new(sync.Mutex),
-	}
-}
-
-// Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
-func (self *Node) Proximity(n *Node) int64 {
-	n.mutex.Lock()
-	if n == nil {
-		return -1
-	}
-	multiplier := int64(1)
-	if n.Region != self.Region {
-		multiplier = 5
-	}
-	score := n.proximity * multiplier
-	n.mutex.Unlock()
-	return score
 }
 
 // RoutingTable is what a Node uses to route requests through the cluster.
@@ -116,7 +49,7 @@ func NewRoutingTable(self *Node) *RoutingTable {
 	}
 }
 
-// Stops stops a RoutingTable from listening for updates.
+// Stop stops a RoutingTable from listening for requests.
 func (t *RoutingTable) Stop() {
 	t.kill <- true
 }
@@ -463,27 +396,4 @@ func (t *RoutingTable) listen() {
 			return
 		}
 	}
-}
-
-// LeafSet contains the 32 closest Nodes to the current Node, based on the numerical proximity of their NodeIDs.
-//
-// The LeafSet is divided into Left and Right; the NodeID space is considered to be circular and thus wraps around. Left contains NodeIDs less than the current NodeID. Right contains NodeIDs greater than the current NodeID.
-type LeafSet struct {
-	left  [16]*Node
-	right [16]*Node
-	self  *Node
-	req   chan *leafSetRequest
-	kill  chan bool
-}
-
-// leafSetRequest is a request for a specific Node in the LeafSet. The Node field determines the Node being queried against. Should it not be set, the Pos field is used in its stead, with a negative Pos signifying the Nodes with NodeIDs less than the current Node nad a positive Pos signifying the Nodes with NodeIDs greater than the current Node.
-//
-//The Mode field is used to determine whether the request is to insert, get, or remove the Node from the LeafSet.
-//
-// Methods that return a routingTableRequest will always do their best to fully populate it, meaning the result can be used to, for example, determine the position of a Node.
-type leafSetRequest struct {
-	Pos  int
-	Node *Node
-	resp chan *leafSetRequest
-	Mode reqMode
 }

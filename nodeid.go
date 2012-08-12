@@ -122,6 +122,30 @@ func (id NodeID) Diff(other NodeID) *big.Int {
 	return res
 }
 
+// RelPos uses modular arithmetic to determine whether the NodeID passed as an argument is to the left of the NodeID it is called on (-1), the same as the NodeID it is called on (0), or to the right of the NodeID it is called on (1) in thee circular node space.
+func (id NodeID) RelPos(other NodeID) int {
+	max := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil)
+	id10 := id.Base10()
+	other10 := other.Base10()
+	middle := big.NewInt(0).Div(max, big.NewInt(2))
+	larger := big.NewInt(0)
+	smaller := big.NewInt(0)
+	if id10.Cmp(other10) > 0 {
+		larger = id10
+		smaller = other10
+	} else {
+		larger = other10
+		smaller = id10
+	}
+	diff := big.NewInt(0).Sub(larger, smaller)
+	if diff.Cmp(middle) < 0 {
+		return 1
+	} else if diff.Cmp(middle) == 0 {
+		return 0
+	}
+	return 1
+}
+
 // Base10 returns the NodeID as a base 10 number, translating each base 16 digit.
 func (id NodeID) Base10() *big.Int {
 	res := big.NewInt(0)
