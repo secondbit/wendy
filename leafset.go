@@ -1,6 +1,7 @@
 package pastry
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -45,6 +46,38 @@ func NewLeafSet(self *Node) *LeafSet {
 	}
 }
 
+// listen is a low-level helper that will set the LeafSet listening for requests and inserts. Passing a value to the LeafSet's kill property will break the listen loop.
+func (l *LeafSet) listen() {
+	for {
+	loop:
+		select {
+		case r := <-l.req:
+			if r.Node == nil {
+				if r.Left && r.Pos >= len(l.left) {
+					fmt.Printf("Invalid position: %v, max is %v.\n", r.Pos, len(l.left)-1)
+					r.resp <- nil
+					break loop
+				} else if !r.Left && r.Pos >= len(l.right) {
+					fmt.Printf("Invalid position: %v, max is %v.\n", r.Pos, len(l.right)-1)
+					r.resp <- nil
+					break loop
+				}
+			}
+			switch r.Mode {
+			case mode_set:
+				r.resp <- l.insert(r)
+				break loop
+			case mode_get:
+				r.resp <- l.get(r)
+				break loop
+			}
+			break loop
+		case <-l.kill:
+			return
+		}
+	}
+}
+
 // Stop stops a LeafSet from listening for requests.
 func (l *LeafSet) Stop() {
 	l.kill <- true
@@ -86,7 +119,7 @@ func (l *LeafSet) insert(r *leafSetRequest) *leafSetRequest {
 
 // insertIntoArray just inserts the given Node into the array of Nodes such that the nodes will be ordered by ID. It's a helper function for inserting a Node into a LeafSet. It returns an array with the Node inserted and the position of the Node in the new array.
 func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int) {
-	result := new([16]*Node)
+	var result [16]*Node
 	result_index := 0
 	src_index := 0
 	inserted := -1
@@ -113,4 +146,66 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int
 		result_index += 1
 	}
 	return result, inserted
+}
+
+// Get retrieves a Node from the LeafSet. If no Node (nil) is passed, the pos and left arguments are used to select the Node. If left is true, the counter-clockwise half of the LeafSet is used. Otherwise, the clockwise half is used.
+//
+// Get returns a populated leafSetRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results.
+//
+// Get is a concurrency-safe method, and will return a TimeoutError if the leafSetRequest is blocekd for more than one second.
+func (l *LeafSet) Get(node *Node, pos int, left bool) (*leafSetRequest, error) {
+	resp := make(chan *leafSetRequest)
+	l.req <- &leafSetRequest{Node: node, Pos: pos, Left: left, Mode: mode_get, resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Node retrieval", 1)
+	}
+	return nil, nil
+}
+
+// get does the actual low-level retrieval of a Node from the LeafSet. It should *only* ever be called from the LeafSet's listen method, to preserve its concurrency-safe property.
+func (l *LeafSet) get(r *leafSetRequest) *leafSetRequest {
+	pos := r.Pos
+	left := r.Left
+	if r.Node != nil {
+		pos = -1
+		side := l.self.ID.RelPos(r.Node.ID)
+		if side == -1 {
+			left = true
+		} else if side == 1 {
+			left = false
+		}
+		if left {
+			for index, node := range(l.left) {
+				if r.Node.ID.Equals(node.ID) {
+					pos = index
+					break
+				}
+			}
+		} else {
+			for index, node := range(l.right) {
+				if r.Node.ID.Equals(node.ID) {
+					pos = index
+					break
+				}
+			}
+		}
+	}
+	if pos == -1 {
+		return nil
+	}
+	if left && pos >= len(l.left) {
+		return nil
+	} else if !left && pos >= len(l.right) {
+		return nil
+	}
+	var res *Node
+	if left {
+		res = l.left[pos]
+	} else {
+		res = l.right[pos]
+	}
+	return &leafSetRequest{Pos: pos, Left: left, Mode: mode_get, Node: res}
 }
