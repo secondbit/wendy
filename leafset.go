@@ -209,3 +209,194 @@ func (l *LeafSet) get(r *leafSetRequest) *leafSetRequest {
 	}
 	return &leafSetRequest{Pos: pos, Left: left, Mode: mode_get, Node: res}
 }
+
+// Scan retrieves the Node in the LeafSet whose NodeID is closest to the passed NodeID and simultaneously closer than the current Node's NodeID. If there is a tie between to Nodes, the Node with the lower ID is used.
+//
+// Scan returns a populated leafSetRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results.
+//
+// Scan is a concurrency-safe method, and will return a TimeoutError if the leafSetRequest is blocked for more than one second.
+func (l *LeafSet) Scan(id NodeID) (*leafSetRequest, error) {
+	resp := make(chan *leafSetRequest)
+	node := &Node{ID: id}
+	l.req <- &leafSetRequest{Node: node, Mode: mode_scan, resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("LeafSet scan", 1)
+	}
+	return nil, nil
+}
+
+// scan does the actual low-level retrieval of a Node from the LeafSet by scanning for the most appropriate Node, such that the Node is more appropriate than the current one. It should *only* ever be called from the LeafSet's listen method, to preserve its concurrency-safe property.
+func (l *LeafSet) scan(r *leafSetRequest) *leafSetRequest {
+	if r.Node == nil {
+		return nil
+	}
+	side := l.self.ID.RelPos(r.Node.ID)
+	best_score := l.self.ID.Diff(r.Node.ID)
+	best := l.self
+	pos := -1
+	if side == -1 {
+		for index, node := range(l.left) {
+			diff := r.Node.ID.Diff(node.ID)
+			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
+				best = node
+				pos = index
+			}
+		}
+	} else {
+		for index, node := range(l.right) {
+			diff := r.Node.ID.Diff(node.ID)
+			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
+				best = node
+				pos = index
+			}
+		}
+	}
+	if pos != -1 {
+		return &leafSetRequest{Pos: pos, Node: best, Mode: mode_scan, Left: (side == -1)}
+	}
+	return nil
+}
+
+// Remove removes a Node from the LeafSet. If no Node is passed, the pos and left arguments determine which Node to remove.
+//
+// Remove returns a populated leafSetRequest object or a TimeoutError. If both returns are nil, the Node to be removed was not in the LeafSet at the time of the request.
+//
+// Remove is a concurrency-safe method, and will return a TimeoutError if it is blocked for more than one second.
+func (l *LeafSet) Remove(node *Node, pos int, left bool) (*leafSetRequest, error) {
+	resp := make(chan *leafSetRequest)
+	l.req <- &leafSetRequest{Pos: pos, Left: left, Node: node, Mode: mode_del, resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Node removal", 1)
+	}
+	return nil, nil
+}
+
+// remove does the actual low-level removal of a Node from the LeafSet. It should *only* ever be called from the LeafSet's listen method, to preserve its concurrency-safe property.
+func (l *LeafSet) remove(r *leafSetRequest) *leafSetRequest {
+	pos := r.Pos
+	left := r.Left
+	if r.Node != nil {
+		pos = -1
+		side := l.self.ID.RelPos(r.Node.ID)
+		if side == -1 {
+			left = true
+		} else if side == 1 {
+			left = false
+		}
+		if left {
+			for index, node := range(l.left) {
+				if node.ID.Equals(r.Node.ID) {
+					pos = index
+					break
+				}
+			}
+		} else {
+			for index, node := range(l.right) {
+				if node.ID.Equals(r.Node.ID) {
+					pos = index
+					break
+				}
+			}
+		}
+	}
+	if left && pos > len(l.left) {
+		return nil
+	}
+	if !left && pos > len(l.right) {
+		return nil
+	}
+	var n *Node
+	if left {
+		n = l.left[pos]
+		var slice []*Node
+		if len(l.left) == 1 {
+			slice = []*Node{}
+		} else if pos+1 == len(l.left) {
+			slice = l.left[:pos]
+		} else if pos == 0 {
+			slice = l.left[1:]
+		} else {
+			slice = append(l.left[:pos], l.left[pos+1:]...)
+		}
+		for i, _ := range l.left {
+			if i < len(slice) {
+				l.left[i] = slice[i]
+			} else {
+				l.left[i] = nil
+			}
+		}
+	} else {
+		n = l.right[pos]
+		var slice []*Node
+		if len(l.right) == 1 {
+			slice = []*Node{}
+		} else if pos+1 == len(l.right) {
+			slice = l.right[:pos]
+		} else if pos == 0 {
+			slice = l.right[1:]
+		} else {
+			slice = append(l.right[:pos], l.right[pos+1:]...)
+		}
+		for i, _ := range l.right {
+			if i < len(slice) {
+				l.right[i] = slice[i]
+			} else {
+				l.right[i] = nil
+			}
+		}
+	}
+	return &leafSetRequest{Node: n, Pos: pos, Left: left, Mode: mode_del}
+}
+
+// route is the logic that handles routing messages within the LeafSet. Messages should never be routed with this method alone. Use the Message.Route method instead.
+func (l *LeafSet) route(id NodeID) (*Node, error) {
+	if !l.contains(id) {
+		return nil, nil
+	}
+	r, err := l.Scan(id)
+	if err != nil {
+		return nil, err
+	}
+	if r != nil {
+		if r.Node != nil {
+			return r.Node, nil
+		}
+	}
+	return nil, nil
+}
+
+// contains checks to see if a NodeID falls within the range covered by a LeafSet.
+func (l *LeafSet) contains(id NodeID) bool {
+	side := l.self.ID.RelPos(id)
+	var extreme *Node
+	if side == -1 {
+		extreme = lastNode(l.left)
+	} else if side == 1 {
+		extreme = lastNode(l.right)
+	}
+	if extreme == nil {
+		return false
+	}
+	if extreme.ID.Less(id) {
+		return false
+	}
+	return true
+}
+
+// lastNode returns the last Node in a side of the LeafSet.
+func lastNode(side [16]*Node) (*Node) {
+	index := len(side)
+	for index > 0 {
+		index = index - 1
+		if side[index] != nil {
+			return side[index]
+		}
+	}
+	return nil
+}
