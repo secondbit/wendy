@@ -93,3 +93,96 @@ func TestLeafSetDoubleInsert(t *testing.T) {
 		t.Errorf("Positions expected to be equal. %d != %d", r.Pos, r2.Pos)
 	}
 }
+
+// Test retrieving a Node by ID
+func TestLeafSetGetByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil response.")
+	}
+	r2, err := leafset.Get(other, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Returned nil response.")
+	}
+	if r2.Pos != r.Pos {
+		t.Errorf("Expected pos %v, got pos %v.", r.Pos, r2.Pos)
+	}
+	if r2.Left != r.Left {
+		expectation := "left"
+		result := "right"
+		if !r.Left {
+			expectation = "right"
+			result = "left"
+		}
+		t.Errorf("Expected node to be on the %v, but it was inserted on the %v.", expectation, result)
+	}
+	if r2.Node == nil {
+		t.Fatalf("r2 returned nil node")
+	}
+	if r.Node == nil {
+		t.Fatalf("r returned nil node")
+	}
+	if !r2.Node.ID.Equals(r.Node.ID) {
+		t.Errorf("Expected node %v, got node %v.", r.Node.ID, r2.Node.ID)
+	}
+}
+
+// Test retrieving a node by position
+func TestLeafSetGetByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	other_id, err := NodeIDFromBytes([]byte("This is another test Node for testing purposes only."))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	r2, err := leafset.Get(nil, r.Pos, r.Left)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Returned nil response.")
+	}
+	if r2.Node == nil {
+		t.Fatalf("r2 returned nil node")
+	}
+	if r.Node == nil {
+		t.Fatalf("r returned nil node")
+	}
+	if !r2.Node.ID.Equals(r.Node.ID) {
+		t.Errorf("Expected node %v, got node %v.", r.Node.ID, r2.Node.ID)
+	}
+}
