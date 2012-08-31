@@ -57,3 +57,39 @@ func TestLeafSetInsert(t *testing.T) {
 		t.Fatalf("Expected Node %s, got Node %s instead.", other_id, r2.Node.ID)
 	}
 }
+
+// Test handling of a Node being inserted twice.
+func TestLeafSetDoubleInsert(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	t.Log(other)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("First insert returned a nil response.")
+	}
+	r2, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r2 == nil {
+		t.Fatalf("Second insert returned a nil response.")
+	}
+	if r.Pos != r2.Pos {
+		t.Errorf("Positions expected to be equal. %d != %d", r.Pos, r2.Pos)
+	}
+}
