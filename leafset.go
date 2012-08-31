@@ -125,19 +125,18 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int
 	inserted := -1
 	for result_index < len(result) {
 		result[result_index] = array[src_index]
-		if inserted >= 0 {
-			continue
-		}
 		if array[src_index] == nil {
-			result[result_index] = node
-			inserted = result_index
+			if inserted < 0 {
+				result[result_index] = node
+				inserted = result_index
+			}
 			break
 		}
-		if array[src_index].ID.Equals(node.ID) {
+		if node.ID.Equals(array[src_index].ID) && inserted < 0 {
 			inserted = result_index
 			continue
 		}
-		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 {
+		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 && inserted < 0 {
 			result[result_index] = node
 			inserted = result_index
 		} else {
