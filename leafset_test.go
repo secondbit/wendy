@@ -186,3 +186,642 @@ func TestLeafSetGetByPos(t *testing.T) {
 		t.Errorf("Expected node %v, got node %v.", r.Node.ID, r2.Node.ID)
 	}
 }
+
+// Test deleting the only node from the leafset using its position
+func TestLeafSetDeleteOnlyByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	_, err = leafset.Remove(nil, r.Pos, r.Left)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := leafset.Get(nil, r.Pos, r.Left)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil && r3.Node != nil && r3.Node.ID.Equals(other_id) {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+}
+
+// Test deleting the only node from the leafset using its ID
+func TestLeafSetDeleteOnlyByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	_, err = leafset.Remove(r.Node, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := leafset.Get(r.Node, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil && r3.Node != nil && r3.Node.ID.Equals(other_id) {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+}
+
+// Test deleting the first of two nodes from the leafset using its position
+func TestLeafSetDeleteFirstByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r2.Left {
+		expectation := "left"
+		result := "right"
+		if !r.Left {
+			expectation = "right"
+			result = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected %v, got %v.", expectation, result)
+	}
+	if r2.Pos != 1 {
+		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Pos)
+	}
+	var removed *leafSetRequest
+	removed, err = leafset.Remove(nil, 0, r.Left)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if removed == nil {
+		t.Fatalf("Returned nil response.")
+	}
+	r3, err := leafset.Get(removed.Node, -1, r.Left)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil && r3.Node != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+	r4, err := leafset.Get(nil, 0, r.Left)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 == nil {
+		t.Fatalf("Got nil response when querying for second insert.")
+	}
+	if r4.Node == nil {
+		t.Fatalf("Got nil node when querying for second insert.")
+	}
+}
+
+// Test deleting the first of two nodes from the leafset using its ID
+func TestLeafSetDeleteFirstByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r2.Left {
+		expectation := "left"
+		result := "right"
+		if !r.Left {
+			expectation = "right"
+			result = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected %v, got %v.", expectation, result)
+	}
+	var firstnode *Node
+	var secondnode *Node
+	if r.Pos < r2.Pos {
+		firstnode = r.Node
+		secondnode = r2.Node
+	} else if r2.Pos < r.Pos {
+		firstnode = r2.Node
+		secondnode = r.Node
+	} else {
+		t.Fatalf("Nodes were inserted in the same position.")
+	}
+	_, err = leafset.Remove(firstnode, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := leafset.Get(firstnode, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+	r4, err := leafset.Get(secondnode, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 == nil {
+		t.Fatalf("Got nil response when querying for second insert.")
+	}
+	if r4.Pos != 0 {
+		t.Errorf("Expected second insert to be in position 0, got %v instead.", r4.Pos)
+	}
+}
+
+// Test deleting the last of multiple nodes from the leafset using its position
+func TestLeafSetDeleteLastByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r2.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected %v, got %v.", expected, reality)
+	}
+	var firstnode *Node
+	var secondnode *Node
+	if r.Pos < r2.Pos {
+		firstnode = r.Node
+		secondnode = r2.Node
+	} else if r2.Pos < r.Pos {
+		firstnode = r2.Node
+		secondnode = r.Node
+	} else {
+		t.Fatalf("Nodes were inserted in the same position.")
+	}
+	_, err = leafset.Remove(nil, 1, r.Left)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := leafset.Get(firstnode, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 == nil {
+		t.Fatalf("Expected node, got nil response.")
+	}
+	if r3.Node == nil {
+		t.Fatalf("Nil node returned.")
+	}
+	if !firstnode.ID.Equals(r3.Node.ID) {
+		t.Errorf("Expected node %s, got node %s", secondnode.ID, r3.Node.ID)
+	}
+	if r3.Pos != 0 {
+		t.Errorf("Expected first insert to be in position 0, got %v instead.", r3.Pos)
+	}
+	r4, err := leafset.Get(secondnode, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 != nil {
+		t.Fatalf("Expected nil response when querying for first insert, got %v instead.", r4.Node)
+	}
+}
+
+// Test deleting the last of multiple nodes from the leafset based on its ID
+func TestLeafSetDeleteLastByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r2.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected the second node to be on the %s, was on the %s instead.", expected, reality)
+	}
+	var firstnode, secondnode *Node
+	if r.Pos < r2.Pos {
+		firstnode = r.Node
+		secondnode = r2.Node
+	} else if r2.Pos < r.Pos {
+		firstnode = r2.Node
+		secondnode = r.Node
+	} else {
+		t.Fatalf("Nodes were both inserted in the same position.")
+	}
+	_, err = leafset.Remove(secondnode, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r3, err := leafset.Get(secondnode, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r3 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	}
+	r4, err := leafset.Get(firstnode, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r4 == nil {
+		t.Fatalf("Got nil response when querying for first insert.")
+	}
+	if r4.Pos != 0 {
+		t.Errorf("Expected first insert to be in position 0, got %v instead.", r4.Pos)
+	}
+}
+
+// Test deleting the middle of multiple nodes from the leafset using its position
+func TestLeafSetDeleteMiddleByPos(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	third_id, err := NodeIDFromBytes([]byte("1234557890accdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r2.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected the second node to be on the %s, was on the %s instead.", expected, reality)
+	}
+	r3, err := leafset.Insert(third)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r3.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected the third node to be on the %s, was on the %s instead.", expected, reality)
+	}
+	var req1, req2, req3 *leafSetRequest
+	if r3.Pos == 0 {
+		req1 = r3
+		if r2.Pos == 0 {
+			req2 = r2
+			req3 = r
+		} else {
+			req2 = r
+			req3 = r2
+		}
+	} else if r3.Pos == 1 {
+		req2 = r3
+		if r2.Pos == 0 {
+			req1 = r2
+			req3 = r
+		} else {
+			req1 = r
+			req3 = r2
+		}
+	} else {
+		req3 = r3
+		if r2.Pos == 0 {
+			req1 = r2
+			req2 = r
+		} else {
+			req1 = r
+			req2 = r2
+		}
+	}
+	_, err = leafset.Remove(nil, 1, req2.Left)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r4, err := leafset.Get(req2.Node, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r4 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r4.Node.ID)
+	}
+	r5, err := leafset.Get(req1.Node, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r5 == nil {
+		t.Fatalf("Got nil response when querying for first insert.")
+	}
+	if r5.Pos != 0 {
+		t.Errorf("Expected first insert to be in position 0, got %v instead.", r5.Pos)
+	}
+	r6, err := leafset.Get(req3.Node, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r6 == nil {
+		t.Fatalf("Got nil response when querying for third insert.")
+	}
+	if r6.Pos != 1 {
+		t.Errorf("Expected third insert to be in position 1, got %v instead.", r6.Pos)
+	}
+}
+
+// Test deleting the middle of multiple nodes from the leafset using its ID
+func TestLeafSetDeleteMiddleByID(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	third_id, err := NodeIDFromBytes([]byte("1234557890accdef"))
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+	r, err := leafset.Insert(other)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r == nil {
+		t.Fatalf("Nil response returned.")
+	}
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r2.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected the second node to be on the %s, was on the %s instead.", expected, reality)
+	}
+	r3, err := leafset.Insert(third)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Nil response returned.")
+	}
+	if r.Left != r3.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Expected the third node to be on the %s, was on the %s instead.", expected, reality)
+	}
+	var req1, req2, req3 *leafSetRequest
+	if r3.Pos == 0 {
+		req1 = r3
+		if r2.Pos == 0 {
+			req2 = r2
+			req3 = r
+		} else {
+			req2 = r
+			req3 = r2
+		}
+	} else if r3.Pos == 1 {
+		req2 = r3
+		if r2.Pos == 0 {
+			req1 = r2
+			req3 = r
+		} else {
+			req1 = r
+			req3 = r2
+		}
+	} else {
+		req3 = r3
+		if r2.Pos == 0 {
+			req1 = r2
+			req2 = r
+		} else {
+			req1 = r
+			req2 = r2
+		}
+	}
+	_, err = leafset.Remove(req2.Node, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	r4, err := leafset.Get(req2.Node, -1, false)
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+	if r4 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r4.Node.ID)
+	}
+	r5, err := leafset.Get(req1.Node, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r5 == nil {
+		t.Fatalf("Got nil response when querying for first insert.")
+	}
+	if r5.Pos != 0 {
+		t.Errorf("Expected first insert to be in position 0, got %v instead.", r5.Pos)
+	}
+	r6, err := leafset.Get(req3.Node, -1, false)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r6 == nil {
+		t.Fatalf("Got nil response when querying for third insert.")
+	}
+	if r6.Pos != 1 {
+		t.Errorf("Expected third insert to be in position 1, got %v instead.", r6.Pos)
+	}
+}
