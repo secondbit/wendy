@@ -825,3 +825,134 @@ func TestLeafSetDeleteMiddleByID(t *testing.T) {
 		t.Errorf("Expected third insert to be in position 1, got %v instead.", r6.Pos)
 	}
 }
+
+// Test scanning the leafset when the key falls in between two nodes
+func TestLeafSetScanSplit(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234560890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("12345677890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("First insert returned nil.")
+	}
+	second_id, err := NodeIDFromBytes([]byte("12345637890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	r2, err := leafset.Insert(second)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r2 == nil {
+		t.Fatal("Second insert returned nil")
+	}
+	if r.Left != r2.Left {
+		expected := "left"
+		reality := "right"
+		if !r.Left {
+			expected = "right"
+			reality = "left"
+		}
+		t.Fatalf("Nodes not inserted on the same side. Second node was supposed to be inserted on the %s, got inserted on the %s.", expected, reality)
+	}
+	message_id, err := NodeIDFromBytes([]byte("12345657890abcde"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	msg_side := message_id.RelPos(r.Node.ID) 
+	if msg_side == -1 && !r.Left {
+		t.Fatalf("Message would be on left, nodes are on right.")
+	} else if msg_side == 1 && r.Left {
+		t.Fatalf("Message would be on right, nodes are on left.")
+	}
+	d1 := message_id.Diff(first_id)
+	d2 := message_id.Diff(second_id)
+	if d1.Cmp(d2) != 0 {
+		t.Fatalf("IDs not equidistant. Expected %s, got %s.", d1, d2)
+	}
+	if !second_id.Less(first_id) {
+		t.Fatalf("Second ID is not lower than the first ID.")
+	}
+	if !leafset.contains(message_id) {
+		t.Fatalf("Message ID not contained in leaf set.")
+	}
+	r3, err := leafset.Scan(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Scan returned nil.")
+	}
+	if !second_id.Equals(r3.Node.ID) {
+		t.Errorf("Wrong Node returned. Expected %s, got %s.", second_id, r3.Node.ID)
+	}
+}
+
+// Test scanning the leafset when there are no suitable matches
+func TestLeafSetScanNone(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890abcdeg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890abcdeh"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if leafset.contains(message_id) {
+		t.Fatalf("Node would be picked up by scan.")
+	}
+	r3, err := leafset.Scan(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatalf("Scan should return last node on the side, returned nil instead.")
+	}
+	var side [16]*Node
+	if r.Left {
+		side = leafset.left
+	} else {
+		side = leafset.right
+	}
+	lastnode := lastNode(side)
+	if lastnode == nil {
+		t.Fatalf("lastNode returned nil.")
+	}
+	if !r3.Node.ID.Equals(lastnode.ID) {
+		t.Errorf("Scan was supposed to return %s, returned %s instead.", lastnode.ID, r3.Node.ID)
+	}
+}
