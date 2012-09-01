@@ -956,3 +956,181 @@ func TestLeafSetScanNone(t *testing.T) {
 		t.Errorf("Scan was supposed to return %s, returned %s instead.", lastnode.ID, r3.Node.ID)
 	}
 }
+
+// Test routing to the only node in the leafset
+func TestLeafSetRouteOnly(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdeg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890acdeff"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	side := self.ID.RelPos(message_id)
+	if side == 1 && r.Left {
+		t.Fatalf("Message would be on the right, node is on the left.")
+	} else if side == -1 && !r.Left {
+		t.Fatalf("Message would be on the left, node is on the right.")
+	}
+	r3, err := leafset.route(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Route returned nil.")
+	}
+	if r3 == nil {
+		t.Fatal("Route returned nil Node.")
+	}
+	if !r3.ID.Equals(first_id) {
+		t.Fatalf("Expected Node %s, got Node %s instead.", first_id, r3.ID)
+	}
+}
+
+// Test routing to a direct match in the leafset
+func TestLeafSetRouteMatch(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdeg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewRoutingTable(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if !message_id.Equals(first_id) {
+		t.Fatalf("Expected ID of %s, got %s instead.", first_id, message_id)
+	}
+	r3, err := leafset.route(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 == nil {
+		t.Fatal("Route returned nil.")
+	}
+	if r3 == nil {
+		t.Fatal("Route returned nil Node.")
+	}
+	if !r3.ID.Equals(first_id) {
+		t.Fatalf("Expected Node %s, got Node %s instead.", first_id, r3.ID)
+	}
+}
+
+// Test routing when the message is not within the leafset
+func TestLeafSetRouteNoneContained(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdeg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890abcdeh"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("123456789abcdefg"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if leafset.contains(message_id) {
+		t.Fatalf("Message contained in leaf set.")
+	}
+	r3, err := leafset.route(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 != nil {
+		t.Fatalf("Expected nil result, got %s instead.", r3.ID)
+	}
+}
+
+// Test routing when there are no nodes in the leafset closer than the current node
+func TestLeafSetRouteNoneCloser(t *testing.T) {
+	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := NewLeafSet(self)
+	go leafset.listen()
+	defer leafset.Stop()
+
+	first_id, err := NodeIDFromBytes([]byte("1234567890abcdea"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	r, err := leafset.Insert(first)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r == nil {
+		t.Fatal("Insert returned nil.")
+	}
+	message_id, err := NodeIDFromBytes([]byte("1234567890abcded"))
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	self_diff := self_id.Diff(message_id)
+	node_diff := first_id.Diff(message_id)
+	node_closer := self_diff.Cmp(node_diff) == 1
+	if node_closer {
+		t.Fatalf("Node is closer.")
+	}
+	r3, err := leafset.route(message_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r3 != nil {
+		t.Fatalf("Expected nil result, got %s instead.", r3.ID)
+	}
+}
