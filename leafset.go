@@ -70,6 +70,12 @@ func (l *LeafSet) listen() {
 			case mode_get:
 				r.resp <- l.get(r)
 				break loop
+			case mode_del:
+				r.resp <- l.remove(r)
+				break loop
+			case mode_scan:
+				r.resp <- l.scan(r)
+				break loop
 			}
 			break loop
 		case <-l.kill:
@@ -178,14 +184,14 @@ func (l *LeafSet) get(r *leafSetRequest) *leafSetRequest {
 		}
 		if left {
 			for index, node := range(l.left) {
-				if r.Node.ID.Equals(node.ID) {
+				if node == nil || r.Node.ID.Equals(node.ID) {
 					pos = index
 					break
 				}
 			}
 		} else {
 			for index, node := range(l.right) {
-				if r.Node.ID.Equals(node.ID) {
+				if node == nil || r.Node.ID.Equals(node.ID) {
 					pos = index
 					break
 				}
@@ -205,6 +211,9 @@ func (l *LeafSet) get(r *leafSetRequest) *leafSetRequest {
 		res = l.left[pos]
 	} else {
 		res = l.right[pos]
+	}
+	if res == nil {
+		return nil
 	}
 	return &leafSetRequest{Pos: pos, Left: left, Mode: mode_get, Node: res}
 }
