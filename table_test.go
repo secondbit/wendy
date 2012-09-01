@@ -644,7 +644,7 @@ func TestRoutingTableDeleteMiddleByPos(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	if r4 != nil {
-		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+		t.Errorf("Expected nil response, got Node %s instead.", r4.Node.ID)
 	}
 	r5, err := table.Get(r.Node, 0, 0, 0)
 	if err != nil {
