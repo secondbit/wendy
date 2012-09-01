@@ -869,7 +869,7 @@ func TestLeafSetScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	msg_side := message_id.RelPos(r.Node.ID) 
+	msg_side := message_id.RelPos(r.Node.ID)
 	if msg_side == -1 && !r.Left {
 		t.Fatalf("Message would be on left, nodes are on right.")
 	} else if msg_side == 1 && r.Left {

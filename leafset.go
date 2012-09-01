@@ -183,14 +183,14 @@ func (l *LeafSet) get(r *leafSetRequest) *leafSetRequest {
 			left = false
 		}
 		if left {
-			for index, node := range(l.left) {
+			for index, node := range l.left {
 				if node == nil || r.Node.ID.Equals(node.ID) {
 					pos = index
 					break
 				}
 			}
 		} else {
-			for index, node := range(l.right) {
+			for index, node := range l.right {
 				if node == nil || r.Node.ID.Equals(node.ID) {
 					pos = index
 					break
@@ -246,7 +246,7 @@ func (l *LeafSet) scan(r *leafSetRequest) *leafSetRequest {
 	best := l.self
 	pos := -1
 	if side == -1 {
-		for index, node := range(l.left) {
+		for index, node := range l.left {
 			diff := r.Node.ID.Diff(node.ID)
 			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
 				best = node
@@ -255,7 +255,7 @@ func (l *LeafSet) scan(r *leafSetRequest) *leafSetRequest {
 			}
 		}
 	} else {
-		for index, node := range(l.right) {
+		for index, node := range l.right {
 			if node == nil {
 				continue
 			}
@@ -303,14 +303,14 @@ func (l *LeafSet) remove(r *leafSetRequest) *leafSetRequest {
 			left = false
 		}
 		if left {
-			for index, node := range(l.left) {
+			for index, node := range l.left {
 				if node.ID.Equals(r.Node.ID) {
 					pos = index
 					break
 				}
 			}
 		} else {
-			for index, node := range(l.right) {
+			for index, node := range l.right {
 				if node.ID.Equals(r.Node.ID) {
 					pos = index
 					break
@@ -403,7 +403,7 @@ func (l *LeafSet) contains(id NodeID) bool {
 }
 
 // lastNode returns the last Node in a side of the LeafSet.
-func lastNode(side [16]*Node) (*Node) {
+func lastNode(side [16]*Node) *Node {
 	index := len(side)
 	for index > 0 {
 		index = index - 1
