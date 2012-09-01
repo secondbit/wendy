@@ -250,14 +250,19 @@ func (l *LeafSet) scan(r *leafSetRequest) *leafSetRequest {
 			diff := r.Node.ID.Diff(node.ID)
 			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
 				best = node
+				best_score = diff
 				pos = index
 			}
 		}
 	} else {
 		for index, node := range(l.right) {
+			if node == nil {
+				continue
+			}
 			diff := r.Node.ID.Diff(node.ID)
 			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
 				best = node
+				best_score = diff
 				pos = index
 			}
 		}
