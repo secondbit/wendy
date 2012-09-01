@@ -382,11 +382,9 @@ func TestLeafSetDeleteFirstByID(t *testing.T) {
 	if r.Pos < r2.Pos {
 		firstnode = r.Node
 		secondnode = r2.Node
-	} else if r2.Pos < r.Pos {
+	} else {
 		firstnode = r2.Node
 		secondnode = r.Node
-	} else {
-		t.Fatalf("Nodes were inserted in the same position.")
 	}
 	_, err = leafset.Remove(firstnode, -1, false)
 	if err != nil {
@@ -460,11 +458,9 @@ func TestLeafSetDeleteLastByPos(t *testing.T) {
 	if r.Pos < r2.Pos {
 		firstnode = r.Node
 		secondnode = r2.Node
-	} else if r2.Pos < r.Pos {
+	} else {
 		firstnode = r2.Node
 		secondnode = r.Node
-	} else {
-		t.Fatalf("Nodes were inserted in the same position.")
 	}
 	_, err = leafset.Remove(nil, 1, r.Left)
 	if err != nil {
@@ -543,11 +539,9 @@ func TestLeafSetDeleteLastByID(t *testing.T) {
 	if r.Pos < r2.Pos {
 		firstnode = r.Node
 		secondnode = r2.Node
-	} else if r2.Pos < r.Pos {
+	} else {
 		firstnode = r2.Node
 		secondnode = r.Node
-	} else {
-		t.Fatalf("Nodes were both inserted in the same position.")
 	}
 	_, err = leafset.Remove(secondnode, -1, false)
 	if err != nil {
