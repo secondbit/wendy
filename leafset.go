@@ -220,7 +220,7 @@ func (l *LeafSet) get(r *leafSetRequest) *leafSetRequest {
 
 // Scan retrieves the Node in the LeafSet whose NodeID is closest to the passed NodeID and simultaneously closer than the current Node's NodeID. If there is a tie between to Nodes, the Node with the lower ID is used.
 //
-// Scan returns a populated leafSetRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results.
+// Scan returns a populated leafSetRequest object or a TimeoutError. If both returns are nil, the query for a Node returned no results. Note: Scan should only ever be run *after* running leafset.contains and verifying the message ID falls within the bounds of the leafset. Otherwise, it will *always* return the last node on whichever side the message falls on.
 //
 // Scan is a concurrency-safe method, and will return a TimeoutError if the leafSetRequest is blocked for more than one second.
 func (l *LeafSet) Scan(id NodeID) (*leafSetRequest, error) {
