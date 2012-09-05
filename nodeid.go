@@ -162,10 +162,13 @@ func (id *NodeID) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON fulfills the Unmarshaler interface, allowing NodeIDs to be unserialised from JSON safely.
 func (id *NodeID) UnmarshalJSON(source []byte) error {
+	if id == nil {
+		return errors.New("UnmarshalJSON on nil NodeID.")
+	}
 	new_id, err := NodeIDFromBytes(source)
 	if err != nil {
 		return err
 	}
-	id = &new_id
+	*id = append((*id)[0:0], new_id...)
 	return nil
 }
