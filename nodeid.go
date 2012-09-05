@@ -169,10 +169,12 @@ func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if id == nil {
 		return errors.New("UnmarshalJSON on nil NodeID.")
 	}
-	new_id, err := NodeIDFromBytes(source)
-	if err != nil {
-		return err
+	for index, b := range source {
+		if index == 0 {
+			*id = append((*id)[0:0], NodeIDDigit(b))
+			continue
+		}
+		*id = append(*id, NodeIDDigit(b))
 	}
-	*id = append((*id)[0:0], new_id...)
 	return nil
 }
