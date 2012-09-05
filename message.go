@@ -7,7 +7,7 @@ import (
 // Message represents the messages that are sent through the cluster of Nodes
 type Message struct {
 	Purpose byte
-	Hops    []Node  // A list of the nodes a message went through
+	Hops    []NodeID  // A list of the nodes a message went through
 	Key     NodeID    // The message's ID
 	Value   string    // The message being passed
 	Sent    time.Time // The time the message was initially sent
