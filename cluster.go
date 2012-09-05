@@ -56,10 +56,13 @@ func (c *Cluster) listen(port int) {
 
 func handleClient(conn net.Conn) {
 	defer conn.Close()
-
 	var msg Message
 	decoder := json.NewDecoder(conn)
-	decoder.Decode(&msg)
+	err := decoder.Decode(&msg)
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 	fmt.Println(msg) // TODO do something useful instead
 }
 
