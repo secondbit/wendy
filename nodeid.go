@@ -160,8 +160,8 @@ func (id *NodeID) MarshalJSON() ([]byte, error) {
 	result := []byte{}
 	for index, b := range *id {
 		if index % 2 == 0 && len(*id) > index {
-			side1 := byte(b << 4)
-			side2 := byte((*id)[b+1].Canonical())
+			side1 := byte(b.Canonical()) << 4
+			side2 := byte((*id)[index+1].Canonical())
 			result = append(result, (side1 + side2))
 		}
 	}
