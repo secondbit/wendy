@@ -60,7 +60,7 @@ func handleClient(conn net.Conn) {
 	var msg Message
 	decoder := json.NewDecoder(conn)
 	decoder.Decode(&msg)
-	fmt.Println(msg.Key) // TODO do something useful instead
+	fmt.Println(msg) // TODO do something useful instead
 }
 
 // Listen starts the Cluster listening for events, including all the individual listeners for each state object.
