@@ -166,5 +166,6 @@ func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if err != nil {
 		return err
 	}
-	id = new_id
+	id = &new_id
+	return nil
 }
