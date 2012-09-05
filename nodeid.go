@@ -2,6 +2,7 @@ package pastry
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"math/big"
 )
@@ -60,11 +61,15 @@ func NodeIDFromBytes(source []byte) (NodeID, error) {
 
 // String returns the hexadecimal string encoding of each NodeIDDigit in the NodeID, discarding the insignificant half of the byte.
 func (id NodeID) String() string {
-	result := ""
-	for _, digit := range id {
-		result += digit.String()
+	result := []byte{}
+	for i, digit := range id {
+		if i%2 == 0 {
+			left := byte(digit.Canonical()) << 4
+			right := byte(id[i+1].Canonical())
+			result = append(result, left+right)
+		}
 	}
-	return result
+	return hex.EncodeToString(result)
 }
 
 // Equals tests two NodeIDs for equality and returns true if they are considered equal, false if they are considered inequal. NodeIDs are considered equal if each digit of the NodeID is equal.
@@ -157,15 +162,7 @@ func (id NodeID) Base10() *big.Int {
 
 // MarshalJSON fulfills the Marshaler interface, allowing NodeIDs to be serialised to JSON safely.
 func (id *NodeID) MarshalJSON() ([]byte, error) {
-	result := []byte{}
-	for index, b := range *id {
-		if index % 2 == 0 && len(*id) > index {
-			side1 := byte(b.Canonical()) << 4
-			side2 := byte((*id)[index+1].Canonical())
-			result = append(result, (side1 + side2))
-		}
-	}
-	return result, nil
+	return []byte(`"` + id.String() + `"`), nil
 }
 
 // UnmarshalJSON fulfills the Unmarshaler interface, allowing NodeIDs to be unserialised from JSON safely.
@@ -173,7 +170,16 @@ func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if id == nil {
 		return errors.New("UnmarshalJSON on nil NodeID.")
 	}
-	new_id, err := NodeIDFromBytes(source)
+	var str string
+	err := json.Unmarshal(source, &str)
+	if err != nil {
+		return err
+	}
+	dec, err := hex.DecodeString(str)
+	if err != nil {
+		return err
+	}
+	new_id, err := NodeIDFromBytes([]byte(dec))
 	if err != nil {
 		return err
 	}
