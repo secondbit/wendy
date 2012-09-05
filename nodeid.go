@@ -158,8 +158,12 @@ func (id NodeID) Base10() *big.Int {
 // MarshalJSON fulfills the Marshaler interface, allowing NodeIDs to be serialised to JSON safely.
 func (id *NodeID) MarshalJSON() ([]byte, error) {
 	result := []byte{}
-	for _, b := range *id {
-		result = append(result, byte(b.Canonical()))
+	for index, b := range *id {
+		if index % 2 == 0 && len(*id) > index {
+			side1 := byte(b << 4)
+			side2 := byte((*id)[b+1].Canonical())
+			result = append(result, (side1 + side2))
+		}
 	}
 	return result, nil
 }
@@ -169,12 +173,10 @@ func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if id == nil {
 		return errors.New("UnmarshalJSON on nil NodeID.")
 	}
-	for index, b := range source {
-		if index == 0 {
-			*id = append((*id)[0:0], NodeIDDigit(b))
-			continue
-		}
-		*id = append(*id, NodeIDDigit(b))
+	new_id, err := NodeIDFromBytes(source)
+	if err != nil {
+		return err
 	}
+	*id = append((*id)[0:0], new_id...)
 	return nil
 }
