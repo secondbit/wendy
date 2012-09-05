@@ -25,7 +25,7 @@ func NewCluster(self *Node) {
 		table: table,
 		leafset: leafset,
 		req: req,
-		kill: kill
+		kill: kill,
 	}
 }
 
