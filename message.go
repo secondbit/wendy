@@ -1,7 +1,6 @@
 package pastry
 
 import (
-	"encoding/json"
 	"time"
 )
 

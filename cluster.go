@@ -1,6 +1,8 @@
 package pastry
 
 import (
+	"encoding/json"
+	"fmt"
 	"net"
 	"strconv"
 )
@@ -15,7 +17,7 @@ type Cluster struct {
 }
 
 // NewCluster creates a new instance of a connection to the network and all the state tables for it.
-func NewCluster(self *Node) {
+func NewCluster(self *Node) *Cluster {
 	table := NewRoutingTable(self)
 	leafset := NewLeafSet(self)
 	req := make(chan *Message)
@@ -30,7 +32,7 @@ func NewCluster(self *Node) {
 }
 
 // Stop shuts down the local listener for the Cluster, preventing it from receiving or sending further messages.
-func (c *Cluser) Stop() {
+func (c *Cluster) Stop() {
 	c.table.Stop()
 	c.leafset.Stop()
 	c.kill <- true
