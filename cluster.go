@@ -9,11 +9,11 @@ import (
 
 // Cluster holds the information about the state of the network. It is the main point of interaction for the network.
 type Cluster struct {
-	self *Node
-	table *RoutingTable
+	self    *Node
+	table   *RoutingTable
 	leafset *LeafSet
-	req chan *Message
-	kill chan bool
+	req     chan *Message
+	kill    chan bool
 }
 
 // NewCluster creates a new instance of a connection to the network and all the state tables for it.
@@ -22,12 +22,12 @@ func NewCluster(self *Node) *Cluster {
 	leafset := NewLeafSet(self)
 	req := make(chan *Message)
 	kill := make(chan bool)
-	return &Cluster {
-		self: self,
-		table: table,
+	return &Cluster{
+		self:    self,
+		table:   table,
 		leafset: leafset,
-		req: req,
-		kill: kill,
+		req:     req,
+		kill:    kill,
 	}
 }
 
@@ -40,7 +40,7 @@ func (c *Cluster) Stop() {
 
 func (c *Cluster) listen(port int) {
 	portstr := strconv.Itoa(port)
-	ln, err := net.Listen("tcp", ":" + portstr)
+	ln, err := net.Listen("tcp", ":"+portstr)
 	if err != nil {
 		panic(err.Error())
 	}
