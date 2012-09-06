@@ -94,6 +94,8 @@ We approached this pragmatically, so there are some differences between the Past
 
 ## Authors
 
+The following people contributed code that found its way into Pastry:
+
 * Paddy Foran ([paddy@secondbit.org](mailto:paddy@secondbit.org))
 
 ## Contributors
