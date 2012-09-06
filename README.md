@@ -24,7 +24,7 @@ The "Cluster" represents your network of nodes. The first thing you should do in
 
 First, you need to create the local Node&mdash;because Pastry is a peer-to-peer algorithm, there's no such thing as a server or client; instead, everything is a "Node", and only Nodes can connect to the Cluster.
 
-{% highlight go %}
+```go
 hostname, err := os.Hostname()
 if err != nil {
 	panic(err.Error())
@@ -34,7 +34,7 @@ if err != nil {
 	panic(err.Error())
 }
 node := pastry.NewNode(id, "your_local_ip_address", "your_global_ip_address", "your_region", 8080)
-{% endhighlight %}
+```
 
 NewNode expects five parameters:
 
@@ -46,9 +46,9 @@ NewNode expects five parameters:
 
 Once you have a Node, you can join the Cluster.
 
-{% highlight go %}
+```go
 cluster := pastry.NewCluster(node)
-{% endhighlight %}
+```
 
 NewCluster just creates a Cluster object, initialises the state tables and channels used to keep the algorithm concurrency-safe, and returns it.
 
@@ -56,14 +56,14 @@ NewCluster just creates a Cluster object, initialises the state tables and chann
 
 To participate in the Cluster, you need to listen for messages. You'll either be used to pass messages along to the correct Node, or will receive messages intended for your Node.
 
-{% highlight go %}
+```go
 cluster.Listen()
 defer cluster.Stop()
-{% endhighlight %}
+```
 
-Listen() is a blocking call, so if you need it to be asynchronous, throw it in a goroutine. **Note**: If you listen twice on the same Cluster in two different goroutines, concurrency-safety **is compromised**. You should only ever have one goroutine Listen to any given Cluster.
+`Listen()` is a blocking call, so if you need it to be asynchronous, throw it in a goroutine. **Note**: If you listen twice on the same Cluster in two different goroutines, concurrency-safety **is compromised**. You should only ever have one goroutine Listen to any given Cluster.
 
-Stop() ends the Listen call on a Cluster. You'll not receive messages, and will stop participating in the Cluster. It is the graceful way for a Node to exit the Cluster.
+`Stop()` ends the Listen call on a Cluster. You'll not receive messages, and will stop participating in the Cluster. It is the graceful way for a Node to exit the Cluster.
 
 ### Registering Handlers For Your Application
 
