@@ -104,6 +104,8 @@ The following people contributed to the creation of Pastry through advice and su
 * [Chris Hartjes](http://www.littlehart.net/atthekeyboard) offered feedback and advice on our testing strategies.
 * [Jesse McNelis](http://jessta.id.au) provided his services both as a bug-hunter and as a rubber duck.
 * [Dr. Steven Ko](http://www.cse.buffalo.edu/people/?u=stevko) of the University at Buffalo offered valuable feedback on Pastry and Distributed Hash Tables in general.
+* [Jan Newmarch's excellent guide to writing networking code in Go](http://jan.newmarch.name/go/) gave us valuable information.
+* [The Go Community](https://groups.google.com/group/go-nuts) (which is superb), offered advice and feedback throughout the creation of this software.
 
 ## License
 
