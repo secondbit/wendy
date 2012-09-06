@@ -86,7 +86,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 func (c *Cluster) Listen() {
 	go c.table.listen()
 	go c.leafset.listen()
-	go c.listen(c.self.Port)
+	c.listen(c.self.Port)
 }
 
 // nodeJoin handles new node arrivals in the cluster.
