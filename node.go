@@ -1,6 +1,8 @@
 package pastry
 
 import (
+	"errors"
+	"strconv"
 	"sync"
 )
 
@@ -41,4 +43,18 @@ func (self *Node) Proximity(n *Node) int64 {
 	score := n.proximity * multiplier
 	n.mutex.Unlock()
 	return score
+}
+
+// Send transmits a message from the current Node to the specified Node.
+func (self *Node) Send(msg Message, destination *Node) error {
+	if self == nil || destination == nil {
+		return errors.New("Can't send to or from a nil node.")
+	}
+	var address string
+	if destination.Region == self.Region {
+		address = destination.LocalIP + ":" + strconv.Itoa(destination.Port)
+	} else {
+		address = destination.GlobalIP + ":" + strconv.Itoa(destination.Port)
+	}
+	return msg.send(address)
 }

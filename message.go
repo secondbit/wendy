@@ -1,6 +1,8 @@
 package pastry
 
 import (
+	"encoding/json"
+	"net"
 	"time"
 )
 
@@ -18,6 +20,17 @@ const NODE_EXIT = byte(0x02) // Used when a Node leaves the cluster
 const NODE_TEST = byte(0x03) // Used when a Node is being tested
 const NODE_STAT = byte(0x04) // Used when a Node broadcasts state info
 
+// String returns a string representation of a message.
 func (m *Message) String() string {
 	return m.Key.String() + ": " + m.Value
+}
+
+// send sends a message to the specified IP address.
+func (m *Message) send(ip string) error {
+	conn, err := net.Dial("tcp", ip)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(conn)
+	return encoder.Encode(m)
 }
