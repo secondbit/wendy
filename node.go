@@ -45,6 +45,12 @@ func (self *Node) Proximity(n *Node) int64 {
 	return score
 }
 
+func (self *Node) setProximity(proximity int64) {
+	self.mutex.Lock()
+	self.proximity = proximity
+	self.mutex.Unlock()
+}
+
 // Send transmits a message from the current Node to the specified Node.
 func (self *Node) Send(msg Message, destination *Node) error {
 	if self == nil || destination == nil {
