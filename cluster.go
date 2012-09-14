@@ -101,11 +101,11 @@ func (c *Cluster) nodeJoin(msg Message) {
 // nodeExit handles node departures in the cluster.
 func (c *Cluster) nodeExit(msg Message) {
 	fmt.Println("Received node exit: " + msg.String())
-	_, err := c.table.Remove(msg.Origin, -1, -1, -1)
+	_, err := c.table.Remove(&msg.Origin, -1, -1, -1)
 	if err != nil {
 		// TODO: Deal with the timeout error
 	}
-	_, err := c.leafset.Remove(msg.Origin, -1, false)
+	_, err = c.leafset.Remove(&msg.Origin, -1, false)
 	if err != nil {
 		// TODO: Deal with the timeout error
 	}
@@ -115,15 +115,15 @@ func (c *Cluster) nodeExit(msg Message) {
 // nodeHeartbeat handles messages that just serve to see if the node is still alive.
 func (c *Cluster) nodeHeartbeat(msg Message) {
 	fmt.Println("Received node heartbeat: " + msg.String())
-	diff := Since(msg.Sent)
-	req, err := self.table.Get(msg.Origin, -1, -1, -1)
+	diff := time.Since(msg.Sent)
+	req, err := c.table.Get(&msg.Origin, -1, -1, -1)
 	if err != nil {
 		// TODO: Deal with the timeout
 	}
 	if req == nil {
 		// TODO: Deal with node not being in routing table
 	}
-	fmt.Printf("Setting proximity of %s to %d.\n", msg.Origin.ID.String().diff.Nanoseconds())
+	fmt.Printf("Setting proximity of %s to %d.\n", msg.Origin.ID.String(), diff.Nanoseconds())
 	req.Node.setProximity(diff.Nanoseconds())
 	// TODO: Reply "I'm alive!"
 }
@@ -143,11 +143,11 @@ func (c *Cluster) nodeStateReceived(msg Message) {
 		// TODO: tell msg.Origin about the conflict so it can start over
 	}
 	for _, node := range data {
-		_, err = c.leafset.Insert(node)
+		_, err = c.leafset.Insert(&node)
 		if err != nil {
 			// TODO: deal with this timeout
 		}
-		_, err = c.table.Insert(node)
+		_, err = c.table.Insert(&node)
 		if err != nil {
 			// TODO: deal with this timeout
 		}
@@ -159,12 +159,12 @@ func (c *Cluster) messageReceived(msg Message) {
 	// TODO: Really need to decide on an API for applications to receive callbacks from Pastry. I'm tempted to use a slice of channels that is periodically tested for closed channels, which will be removed, but that seems like unnecessary overhead
 
 	fmt.Println("Received message: " + msg.String())
-	next, err := c.leafset.route(msg.ID)
+	next, err := c.leafset.route(msg.Key)
 	if err != nil {
 		// TODO: handle the timeout error
 	}
 	if next == nil {
-		next, err = c.table.route(msg.ID)
+		next, err = c.table.route(msg.Key)
 		if err != nil {
 			// TODO: handle the timeout error
 		}
