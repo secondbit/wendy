@@ -9,6 +9,7 @@ import (
 // Message represents the messages that are sent through the cluster of Nodes
 type Message struct {
 	Purpose byte
+	Origin  Node      // The Node a message originated at
 	Hops    []NodeID  // A list of the nodes a message went through
 	Key     NodeID    // The message's ID
 	Value   string    // The message being passed
