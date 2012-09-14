@@ -128,6 +128,8 @@ func (c *Cluster) nodeHeartbeat(msg Message) {
 	// TODO: Reply "I'm alive!"
 }
 
+// BUG(paddyforan): If the Nodes don't agree on the time, this method can create an infinite loop. Workaround: Use NTP, for the love of God!
+
 // nodeStateReceived handles messages that are broadcast when a node's state is updated, and can be used to update the local node's state tables with the relevant information, if there is any.
 func (c *Cluster) nodeStateReceived(msg Message) {
 	fmt.Println("Received node state: " + msg.String())
@@ -138,7 +140,6 @@ func (c *Cluster) nodeStateReceived(msg Message) {
 	}
 	if c.lastStateUpdate.After(msg.Sent) {
 		fmt.Println("Detected race condition; " + msg.Origin.ID.String() + " sent the message at " + msg.Sent.String() + " but we last updated state at " + c.lastStateUpdate.String() + ". Notifying " + msg.Origin.ID.String() + ".")
-		// BUG(paddyforan): If the Nodes don't agree on the time, this can cause an infinite loop. Workaround: Use NTP, for the love of God!
 		// TODO: tell msg.Origin about the conflict so it can start over
 	}
 	for _, node := range data {
