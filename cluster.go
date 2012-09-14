@@ -123,7 +123,7 @@ func (c *Cluster) nodeHeartbeat(msg Message) {
 	if req == nil {
 		// TODO: Deal with node not being in routing table
 	}
-	fmt.Printf("Setting proximity of %s to %d.\n", msg.Origin.ID.String(). diff.Nanoseconds())
+	fmt.Printf("Setting proximity of %s to %d.\n", msg.Origin.ID.String().diff.Nanoseconds())
 	req.Node.setProximity(diff.Nanoseconds())
 	// TODO: Reply "I'm alive!"
 }
