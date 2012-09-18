@@ -1,7 +1,10 @@
 package pastry
 
 import (
+	"crypto/rand"
+	"io"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1254,5 +1257,51 @@ func BenchmarkRoutingTableGetByProximity(b *testing.B) {
 		}
 		r := reqs[req]
 		table.GetByProximity(r.Row, r.Col, 0)
+	}
+}
+
+// How fast can we dump the nodes in the table
+func BenchmarkRoutingTableDump(b *testing.B) {
+	b.StopTimer()
+	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	table := NewRoutingTable(self)
+	go table.listen()
+	defer table.Stop()
+
+	var wg sync.WaitGroup
+	for i := 0; i < 100000; i = i + 1 {
+		wg.Add(1)
+		go func() {
+			idBytes := make([]byte, 16)
+			_, err := io.ReadFull(rand.Reader, idBytes)
+			if err != nil {
+				b.Fatalf(err.Error())
+			}
+			id, err := NodeIDFromBytes(idBytes)
+			if err != nil {
+				b.Fatalf(err.Error())
+			}
+			node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+			_, err = table.Insert(node)
+			if err != nil {
+				b.Fatalf(err.Error())
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		nodes, err := table.Dump()
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		if len(nodes) < 100000 {
+			b.Fatalf("Supposed to have %d nodes, have %d instead.", 100000, len(nodes))
+		}
 	}
 }
