@@ -178,8 +178,25 @@ func (c *Cluster) nodeExit(msg Message) {
 		}
 		// Just here to stop the compile errors
 		fmt.Println(repairMsg.Origin)
-		// TODO: decide which node to ask for a leafset
-		// TODO: send message to that node
+		repairSource, err := c.leafset.Scan(msg.Origin.ID)
+		if err != nil {
+			for _, app := range c.applications {
+				app.OnError(err)
+			}
+		}
+		if repairSource == nil || repairSource.Node == nil {
+			panic("Half the leafset is empty!")
+		}
+		err = c.self.Send(repairMsg, repairSource.Node)
+		if err == deadNodeError {
+			repairMsg.Origin = *(repairSource.Node)
+			c.nodeExit(repairMsg)
+		} else {
+			for _, app := range c.applications {
+				app.OnError(err)
+			}
+
+		}
 		dump, err := c.leafset.Dump()
 		if err != nil {
 			for _, app := range c.applications {
@@ -333,7 +350,10 @@ func (c *Cluster) messageReceived(msg Message, addSelf bool) {
 	err = c.self.Send(msg, next)
 	if err != nil {
 		if err == deadNodeError {
-			c.nodeExit(msg)
+			failedMsg := Message{
+				Origin: *next,
+			}
+			c.nodeExit(failedMsg)
 			c.messageReceived(msg, false)
 			return
 		}
