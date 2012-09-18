@@ -142,7 +142,7 @@ func (c *Cluster) nodeJoin(msg Message) {
 	err = c.self.Send(response, &msg.Origin)
 	if err != nil {
 		fmt.Println("Node died before we could send it state.")
-		nodeExit(msg)
+		c.nodeExit(msg)
 		for _, app := range c.applications {
 			app.OnError(err)
 		}
@@ -176,6 +176,8 @@ func (c *Cluster) nodeExit(msg Message) {
 			Value:   "",
 			Sent:    time.Now(),
 		}
+		// Just here to stop the compile errors
+		fmt.Println(repairMsg.Origin)
 		// TODO: decide which node to ask for a leafset
 		// TODO: send message to that node
 		dump, err := c.leafset.Dump()
@@ -244,7 +246,7 @@ func (c *Cluster) nodeStateReceived(msg Message) {
 		if err != nil {
 			if err == deadNodeError {
 				fmt.Println("Node died before we could tell it about the race condition.")
-				nodeExit(msg)
+				c.nodeExit(msg)
 			} else {
 				for _, app := range c.applications {
 					app.OnError(err)
@@ -326,13 +328,13 @@ func (c *Cluster) messageReceived(msg Message, addSelf bool) {
 		app.OnForward(&msg, next.ID)
 	}
 	if addSelf {
-		msg.Hops = append(&msg.Hops, c.self.ID)
+		msg.Hops = append(msg.Hops, c.self.ID)
 	}
 	err = c.self.Send(msg, next)
 	if err != nil {
 		if err == deadNodeError {
-			nodeExit(msg)
-			messageReceived(msg, false)
+			c.nodeExit(msg)
+			c.messageReceived(msg, false)
 			return
 		}
 		for _, application := range c.applications {
@@ -363,11 +365,11 @@ func (c *Cluster) sendLeafSet(msg Message) {
 		Value:   string(leaves),
 		Sent:    time.Now(),
 	}
-	err = c.self.Send(repairMsg, &msg.Origin)
+	err = c.self.Send(repairMessage, &msg.Origin)
 	if err != nil {
 		if err == deadNodeError {
 			fmt.Println("Node died before we could send it leafset.")
-			nodeExit(msg)
+			c.nodeExit(msg)
 			return
 		}
 		for _, app := range c.applications {
