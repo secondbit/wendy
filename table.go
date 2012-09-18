@@ -11,12 +11,13 @@ import (
 //
 // Methods that return a routingTableRequest will always do their best to fully populate it, meaning the result can be used to, for example, determine the Row/Col/Entry of a Node.
 type routingTableRequest struct {
-	Row   int
-	Col   int
-	Entry int
-	Mode  reqMode
-	Node  *Node
-	resp  chan *routingTableRequest
+	Row        int
+	Col        int
+	Entry      int
+	Mode       reqMode
+	Node       *Node
+	resp       chan *routingTableRequest
+	multi_resp chan []*Node
 }
 
 // RoutingTable is what a Node uses to route requests through the cluster.
@@ -328,6 +329,36 @@ func (t *RoutingTable) remove(r *routingTableRequest) *routingTableRequest {
 	return resp
 }
 
+// Dump returns a slice of every Node in the RoutingTable.
+//
+// Dump is a concurrency-safe method, and will return a TimeoutError if it is blocked for more than one second.
+func (t *RoutingTable) Dump() ([]*Node, error) {
+	resp := make(chan []*Node)
+	t.req <- &routingTableRequest{Row: -1, Col: -1, Entry: -1, Node: nil, Mode: mode_dump, multi_resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Routing table dump", 1)
+	}
+	return nil, nil
+}
+
+// dump is a way to export the contents of the routingtable
+func (t *RoutingTable) dump() []*Node {
+	nodes := []*Node{}
+	for _, row := range t.nodes {
+		for _, col := range row {
+			for _, entry := range col {
+				if entry != nil {
+					nodes = append(nodes, entry)
+				}
+			}
+		}
+	}
+	return nodes
+}
+
 // route is the logic that handles routing messages within the RoutingTable. Messages should never be routed with this method alone. Use the Message.Route method instead.
 func (t *RoutingTable) route(id NodeID) (*Node, error) {
 	row := t.self.ID.CommonPrefixLen(id)
@@ -357,7 +388,7 @@ func (t *RoutingTable) listen() {
 	loop:
 		select {
 		case r := <-t.req:
-			if r.Node == nil {
+			if r.Node == nil && r.Mode != mode_dump {
 				if r.Row >= len(t.nodes) {
 					fmt.Printf("Invalid row input: %v, max is %v.\n", r.Row, len(t.nodes)-1)
 					r.resp <- nil
@@ -389,6 +420,9 @@ func (t *RoutingTable) listen() {
 				break loop
 			case mode_scan:
 				r.resp <- t.scan(r)
+				break loop
+			case mode_dump:
+				r.multi_resp <- t.dump()
 				break loop
 			}
 			break loop

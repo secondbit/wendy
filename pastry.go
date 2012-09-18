@@ -30,3 +30,5 @@ const mode_get = reqMode(1)
 const mode_del = reqMode(2)
 const mode_prx = reqMode(3)
 const mode_scan = reqMode(4)
+const mode_dump = reqMode(5)
+const mode_beat = reqMode(6) // For getting the nodes that need a heartbeat

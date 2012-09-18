@@ -24,11 +24,12 @@ type LeafSet struct {
 //
 // Methods that return a leafSetRequest will always do their best to fully populate it, meaning the result can be used to, for example, determine the position of a Node.
 type leafSetRequest struct {
-	Pos  int
-	Left bool
-	Node *Node
-	resp chan *leafSetRequest
-	Mode reqMode
+	Pos        int
+	Left       bool
+	Node       *Node
+	resp       chan *leafSetRequest
+	multi_resp chan []*Node
+	Mode       reqMode
 }
 
 // NewLeafSet initialises a new LeafSet along with all its corresponding channels.
@@ -75,6 +76,12 @@ func (l *LeafSet) listen() {
 				break loop
 			case mode_scan:
 				r.resp <- l.scan(r)
+				break loop
+			case mode_dump:
+				r.multi_resp <- l.dump()
+				break loop
+			case mode_beat:
+				r.multi_resp <- l.getUnheardFrom()
 				break loop
 			}
 			break loop
@@ -365,6 +372,77 @@ func (l *LeafSet) remove(r *leafSetRequest) *leafSetRequest {
 		}
 	}
 	return &leafSetRequest{Node: n, Pos: pos, Left: left, Mode: mode_del}
+}
+
+// Dump returns a slice of every Node in the LeafSet.
+//
+// Dump is a concurrency-safe method, and will return a TimeoutError if it is blocked for more than one second.
+func (l *LeafSet) Dump() ([]*Node, error) {
+	resp := make(chan []*Node)
+	l.req <- &leafSetRequest{Pos: -1, Left: true, Node: nil, Mode: mode_dump, multi_resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("Leafset dump", 1)
+	}
+	return nil, nil
+}
+
+// dump is a way to export the contents of the leafset
+func (l *LeafSet) dump() []*Node {
+	nodes := []*Node{}
+	for _, node := range l.left {
+		if node == nil {
+			break
+		}
+		nodes = append(nodes, node)
+	}
+	for _, node := range l.right {
+		if node == nil {
+			break
+		}
+		nodes = append(nodes, node)
+	}
+	return nodes
+}
+
+// GetUnheardFrom returns a slice of every Node in the LeafSet that hasn't been heard from in over 5 minutes.
+//
+// GetUnheardFrom is a concurrency-safe method, and will return a TimeoutError if it is blocked for more than one second.
+func (l *LeafSet) GetUnheardFrom() ([]*Node, error) {
+	resp := make(chan []*Node)
+	l.req <- &leafSetRequest{Pos: -1, Left: true, Node: nil, Mode: mode_beat, multi_resp: resp}
+	select {
+	case r := <-resp:
+		return r, nil
+	case <-time.After(1 * time.Second):
+		return nil, throwTimeout("getting leaves for heartbeat", 1)
+	}
+	return nil, nil
+}
+
+// getUnheardFrom is a way to export the contents of the leafset
+func (l *LeafSet) getUnheardFrom() []*Node {
+	nodes := []*Node{}
+	cutoff := time.Now().Add(5 * time.Minute * -1)
+	for _, node := range l.left {
+		if node == nil {
+			break
+		}
+		if node.LastHeardFrom().Before(cutoff) {
+			nodes = append(nodes, node)
+		}
+	}
+	for _, node := range l.right {
+		if node == nil {
+			break
+		}
+		if node.LastHeardFrom().Before(cutoff) {
+			nodes = append(nodes, node)
+		}
+	}
+	return nodes
 }
 
 // route is the logic that handles routing messages within the LeafSet. Messages should never be routed with this method alone. Use the Message.Route method instead.
