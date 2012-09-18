@@ -341,25 +341,33 @@ func (c *Cluster) messageReceived(msg Message, addSelf bool) {
 		}
 	}
 	fmt.Println("Forwarding message '" + msg.String() + "' to Node " + next.ID.String())
+	forward := true
 	for _, app := range c.applications {
-		app.OnForward(&msg, next.ID)
+		f := app.OnForward(&msg, next.ID)
+		if forward {
+			forward = f
+		}
 	}
-	if addSelf {
-		msg.Hops = append(msg.Hops, c.self.ID)
-	}
-	err = c.self.Send(msg, next)
-	if err != nil {
-		if err == deadNodeError {
-			failedMsg := Message{
-				Origin: *next,
+	if forward {
+		if addSelf {
+			msg.Hops = append(msg.Hops, c.self.ID)
+		}
+		err = c.self.Send(msg, next)
+		if err != nil {
+			if err == deadNodeError {
+				failedMsg := Message{
+					Origin: *next,
+				}
+				c.nodeExit(failedMsg)
+				c.messageReceived(msg, false)
+				return
 			}
-			c.nodeExit(failedMsg)
-			c.messageReceived(msg, false)
-			return
+			for _, application := range c.applications {
+				application.OnError(err)
+			}
 		}
-		for _, application := range c.applications {
-			application.OnError(err)
-		}
+	} else {
+		fmt.Println("Message halted because of OnForward.")
 	}
 }
 
