@@ -122,10 +122,14 @@ func (l *LeafSet) insert(r *leafSetRequest) *leafSetRequest {
 	side := l.self.ID.RelPos(r.Node.ID)
 	if side == -1 {
 		l.left, pos = r.Node.insertIntoArray(l.left, l.self)
-		return &leafSetRequest{Mode: mode_set, Node: r.Node, Pos: pos, Left: true}
+		if pos > -1 {
+			return &leafSetRequest{Mode: mode_set, Node: r.Node, Pos: pos, Left: true}
+		}
 	} else if side == 1 {
 		l.right, pos = r.Node.insertIntoArray(l.right, l.self)
-		return &leafSetRequest{Mode: mode_set, Node: r.Node, Pos: pos, Left: false}
+		if pos > -1 {
+			return &leafSetRequest{Mode: mode_set, Node: r.Node, Pos: pos, Left: false}
+		}
 	}
 	return nil
 }
@@ -136,6 +140,7 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int
 	result_index := 0
 	src_index := 0
 	inserted := -1
+	duplicate := false
 	for result_index < len(result) {
 		result[result_index] = array[src_index]
 		if array[src_index] == nil {
@@ -146,10 +151,10 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int
 			break
 		}
 		if node.ID.Equals(array[src_index].ID) && inserted < 0 {
-			inserted = result_index
+			duplicate = true
 			continue
 		}
-		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 && inserted < 0 {
+		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 && inserted < 0 && !duplicate{
 			result[result_index] = node
 			inserted = result_index
 		} else {

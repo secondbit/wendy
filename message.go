@@ -3,6 +3,7 @@ package pastry
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"time"
 )
@@ -33,10 +34,12 @@ var deadNodeError = errors.New("Node did not respond to heartbeat.")
 
 // send sends a message to the specified IP address.
 func (m *Message) send(ip string) error {
-	conn, err := net.Dial("tcp", ip)
+	conn, err := net.DialTimeout("tcp", ip, 5 * time.Second)
 	if err != nil {
 		return err
 	}
+	defer conn.Close()
+	conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	encoder := json.NewEncoder(conn)
 	err = encoder.Encode(m)
 	if err != nil {
@@ -46,8 +49,13 @@ func (m *Message) send(ip string) error {
 		conn.SetReadDeadline(time.Now().Add(5 * time.Second))
 		var result []byte
 		_, err = conn.Read(result)
-		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
-			return deadNodeError
+		if err != nil {
+			if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+				return deadNodeError
+			}
+			if err == io.EOF {
+				err = nil
+			}
 		}
 	}
 	return err

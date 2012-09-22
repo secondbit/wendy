@@ -78,8 +78,9 @@ func (self *Node) Send(msg Message, destination *Node) error {
 		address = destination.GlobalIP + ":" + strconv.Itoa(destination.Port)
 	}
 	err := msg.send(address)
-	if err == nil {
-		destination.updateLastHeardFrom()
-	}
+	// TODO: Need to update all calls of this to only originate from the routing table.
+	//if err == nil {
+	//	destination.updateLastHeardFrom()
+	//}
 	return err
 }

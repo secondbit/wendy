@@ -30,6 +30,10 @@ type Cluster struct {
 	applications    []Application
 }
 
+func (c *Cluster) ID() NodeID {
+	return c.self.ID
+}
+
 // NewCluster creates a new instance of a connection to the network and all the state tables for it.
 func NewCluster(self *Node) *Cluster {
 	table := NewRoutingTable(self)
@@ -43,6 +47,7 @@ func NewCluster(self *Node) *Cluster {
 		req:             req,
 		kill:            kill,
 		lastStateUpdate: time.Now(),
+		applications:    []Application{},
 	}
 }
 
@@ -53,19 +58,71 @@ func (c *Cluster) Stop() {
 	c.kill <- true
 }
 
+func (c *Cluster) RegisterCallback(app Application) {
+	c.applications = append(c.applications, app)
+}
+
+// Listen starts the Cluster listening for events, including all the individual listeners for each state object.
+func (c *Cluster) Listen() {
+	go c.table.listen()
+	go c.leafset.listen()
+	go c.listen(c.self.Port)
+	for {
+		time.Sleep(1 * time.Second)
+		c.sendHeartbeat()
+	}
+
+}
+
 func (c *Cluster) listen(port int) {
 	portstr := strconv.Itoa(port)
 	ln, err := net.Listen("tcp", ":"+portstr)
 	if err != nil {
 		panic(err.Error())
 	}
+	defer ln.Close()
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			fmt.Println(err.Error())
-			continue
+			panic(err.Error())
 		}
 		go c.handleClient(conn)
+	}
+}
+
+func (c *Cluster) sendHeartbeat() {
+	msg := Message{
+		Purpose: NODE_TEST,
+		Origin:  *c.self,
+		Hops:    []NodeID{c.self.ID},
+		Key:     c.self.ID,
+		Value:   "",
+		Sent:    time.Now(),
+	}
+	nodes, err := c.table.Dump()
+	if err != nil {
+		for _, app := range c.applications {
+			app.OnError(err)
+		}
+	}
+	leaves, err := c.leafset.Dump()
+	if err != nil {
+		for _, app := range c.applications {
+			app.OnError(err)
+		}
+	}
+	nodes = append(nodes, leaves...)
+	for _, node := range nodes {
+		go func(n *Node) {
+			err = c.self.Send(msg, n)
+			if err == deadNodeError {
+				c.nodeExit(Message{Origin: *n})
+			} else if err != nil{
+				for _, app := range c.applications {
+					app.OnError(err)
+				}
+			}
+		}(node)
 	}
 }
 
@@ -101,17 +158,8 @@ func (c *Cluster) handleClient(conn net.Conn) {
 	}
 }
 
-// Listen starts the Cluster listening for events, including all the individual listeners for each state object.
-func (c *Cluster) Listen() {
-	go c.table.listen()
-	go c.leafset.listen()
-	// TODO: set up heartbeat ping goroutine
-	c.listen(c.self.Port)
-}
-
 // nodeJoin handles new node arrivals in the cluster.
 func (c *Cluster) nodeJoin(msg Message) {
-	fmt.Println("Received node join: " + msg.String())
 	leaf_nodes, err := c.leafset.Dump()
 	if err != nil {
 		for _, app := range c.applications {
@@ -147,6 +195,18 @@ func (c *Cluster) nodeJoin(msg Message) {
 			app.OnError(err)
 		}
 	}
+	_, err = c.leafset.Insert(&msg.Origin)
+	if err != nil {
+		for _, app := range c.applications {
+			app.OnError(err)
+		}
+	}
+	_, err = c.table.Insert(&msg.Origin)
+	if err != nil {
+		for _, app := range c.applications {
+			app.OnError(err)
+		}
+	}
 	for _, app := range c.applications {
 		app.OnNodeJoin(msg.Origin)
 	}
@@ -154,7 +214,6 @@ func (c *Cluster) nodeJoin(msg Message) {
 
 // nodeExit handles node departures in the cluster.
 func (c *Cluster) nodeExit(msg Message) {
-	fmt.Println("Received node exit: " + msg.String())
 	_, err := c.table.Remove(&msg.Origin, -1, -1, -1)
 	if err != nil {
 		for _, application := range c.applications {
@@ -176,8 +235,6 @@ func (c *Cluster) nodeExit(msg Message) {
 			Value:   "",
 			Sent:    time.Now(),
 		}
-		// Just here to stop the compile errors
-		fmt.Println(repairMsg.Origin)
 		repairSource, err := c.leafset.Scan(msg.Origin.ID)
 		if err != nil {
 			for _, app := range c.applications {
@@ -214,7 +271,6 @@ func (c *Cluster) nodeExit(msg Message) {
 
 // nodeHeartbeat handles messages that just serve to see if the node is still alive.
 func (c *Cluster) nodeHeartbeat(msg Message) {
-	fmt.Println("Received node heartbeat: " + msg.String())
 	diff := time.Since(msg.Sent)
 	req, err := c.table.Get(&msg.Origin, -1, -1, -1)
 	if err != nil {
@@ -222,7 +278,7 @@ func (c *Cluster) nodeHeartbeat(msg Message) {
 			application.OnError(err)
 		}
 	}
-	if req == nil {
+	if req == nil || req.Node == nil {
 		req, err = c.table.Insert(&msg.Origin)
 		if err != nil {
 			for _, application := range c.applications {
@@ -241,7 +297,6 @@ func (c *Cluster) nodeHeartbeat(msg Message) {
 
 // nodeStateReceived handles messages that are broadcast when a node's state is updated, and can be used to update the local node's state tables with the relevant information, if there is any.
 func (c *Cluster) nodeStateReceived(msg Message) {
-	fmt.Println("Received node state: " + msg.String())
 	var data []Node
 	err := json.Unmarshal([]byte(msg.Value), &data)
 	if err != nil {
@@ -271,40 +326,31 @@ func (c *Cluster) nodeStateReceived(msg Message) {
 			}
 		}
 	}
-	updatedLeafset := false
+	//updatedLeafset := false
+	//updatedTable := false
+	//data = append(data, msg.Origin)
 	for _, node := range data {
-		req, err := c.leafset.Insert(&node)
+		_, err := c.leafset.Insert(&node)
 		if err != nil {
 			for _, application := range c.applications {
 				application.OnError(err)
 			}
 		}
-		if req != nil {
+		/*if req != nil {
 			updatedLeafset = true
-		}
+		}*/
 		_, err = c.table.Insert(&node)
 		if err != nil {
 			for _, application := range c.applications {
 				application.OnError(err)
 			}
 		}
-	}
-	req, err := c.leafset.Insert(&msg.Origin)
-	if err != nil {
-		for _, application := range c.applications {
-			application.OnError(err)
-		}
-	}
-	if req != nil {
-		updatedLeafset = true
-	}
-	_, err = c.table.Insert(&msg.Origin)
-	if err != nil {
-		for _, application := range c.applications {
-			application.OnError(err)
-		}
-	}
-	if updatedLeafset {
+		/*if req2 != nil {
+			updatedTable = true
+		}*/
+	}/*
+	var nodes, leafset, table []*Node
+	/*if updatedLeafset {
 		dump, err := c.leafset.Dump()
 		if err != nil {
 			for _, app := range c.applications {
@@ -314,12 +360,65 @@ func (c *Cluster) nodeStateReceived(msg Message) {
 		for _, app := range c.applications {
 			app.OnNewLeafs(dump)
 		}
+		nodes = append(nodes, dump...)
+		leafset = dump
 	}
+	if updatedTable {
+		dump, err := c.table.Dump()
+		if err != nil {
+			for _, app := range c.applications {
+				app.OnError(err)
+			}
+		}
+		nodes = append(nodes, dump...)
+		table = dump
+	}
+	if updatedTable { || updatedLeafset {
+		if !updatedLeafset {
+			leafset, err = c.leafset.Dump()
+			if err != nil {
+				for _, app := range c.applications {
+					app.OnError(err)
+				}
+			}
+		}
+		if !updatedTable {
+			table, err = c.table.Dump()
+			if err != nil {
+				for _, app := range c.applications {
+					app.OnError(err)
+				}
+			}
+		}
+		updatelist := append(leafset, table...)
+		data, err := json.Marshal(table)
+		if err != nil {
+			for _, app := range c.applications {
+				app.OnError(err)
+			}
+		}
+		updateMsg := Message{
+			Purpose: NODE_STAT,
+			Origin:  *c.self,
+			Hops:    []NodeID{c.self.ID},
+			Key:     c.self.ID,
+			Value:   string(data),
+			Sent:    time.Now(),
+		}
+		for _, node := range table {
+			fmt.Printf("%s: Sending msg to %s\n", c.self.ID, node.ID)
+			err = c.self.Send(updateMsg, node)
+			if err != nil {
+				for _, app := range c.applications {
+					app.OnError(err)
+				}
+			}
+		}
+	}*/
 }
 
 // messageReceived handles messages that are intended for applications built on Pastry.
 func (c *Cluster) messageReceived(msg Message, addSelf bool) {
-	fmt.Println("Received message: " + msg.String())
 	next, err := c.leafset.route(msg.Key)
 	if err != nil {
 		for _, application := range c.applications {
@@ -335,12 +434,11 @@ func (c *Cluster) messageReceived(msg Message, addSelf bool) {
 		}
 	}
 	if next == nil {
-		fmt.Println("Delivering message: " + msg.String())
 		for _, app := range c.applications {
 			app.OnDeliver(msg)
 		}
+		return
 	}
-	fmt.Println("Forwarding message '" + msg.String() + "' to Node " + next.ID.String())
 	forward := true
 	for _, app := range c.applications {
 		f := app.OnForward(&msg, next.ID)
@@ -372,7 +470,7 @@ func (c *Cluster) messageReceived(msg Message, addSelf bool) {
 }
 
 func (c *Cluster) sendLeafSet(msg Message) {
-	fmt.Println("Sending leaf set...")
+	fmt.Println(c.self.ID.String() + ": Sending leaf set...")
 	dump, err := c.leafset.Dump()
 	if err != nil {
 		for _, app := range c.applications {
@@ -404,4 +502,49 @@ func (c *Cluster) sendLeafSet(msg Message) {
 			app.OnError(err)
 		}
 	}
+}
+
+func (c *Cluster) Join(ip string, port int) error {
+	msg := Message{
+		Purpose: NODE_JOIN,
+		Origin:  *c.self,
+		Hops:    []NodeID{c.self.ID},
+		Key:     c.self.ID,
+		Value:   "",
+		Sent:    time.Now(),
+	}
+	target := NewNode(c.self.ID, ip, ip, c.self.Region, port)
+	err := c.self.Send(msg, target)
+	if err != nil && err == deadNodeError {
+		panic("Trying to join dead cluster.")
+	}
+	return err
+}
+
+func (c *Cluster) Send(msg Message) error {
+	target, err := c.leafset.route(msg.Key)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		target, err = c.table.route(msg.Key)
+		if err != nil {
+			return err
+		}
+	}
+	if target == nil {
+		for _, app := range c.applications {
+			app.OnDeliver(msg)
+		}
+		return nil
+	}
+	err = c.self.Send(msg, target)
+	if err != nil {
+		if err == deadNodeError {
+			fmt.Println("Dead node. :(")
+			c.nodeExit(Message{Origin: *target})
+			return c.Send(msg)
+		}
+	}
+	return err
 }

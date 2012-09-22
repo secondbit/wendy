@@ -11,13 +11,13 @@ import (
 //
 // Methods that return a routingTableRequest will always do their best to fully populate it, meaning the result can be used to, for example, determine the Row/Col/Entry of a Node.
 type routingTableRequest struct {
-	Row        int
-	Col        int
-	Entry      int
-	Mode       reqMode
-	Node       *Node
-	resp       chan *routingTableRequest
-	multi_resp chan []*Node
+	Row          int
+	Col          int
+	Entry        int
+	Mode         reqMode
+	Node         *Node
+	resp         chan *routingTableRequest
+	multi_resp   chan []*Node
 }
 
 // RoutingTable is what a Node uses to route requests through the cluster.
@@ -78,11 +78,11 @@ func (t *RoutingTable) insert(r *routingTableRequest) *routingTableRequest {
 		return nil
 	}
 	row := t.self.ID.CommonPrefixLen(r.Node.ID)
-	if row > len(t.nodes) {
+	if row >= len(t.nodes) {
 		return nil
 	}
 	col := int(r.Node.ID[row].Canonical())
-	if col > len(t.nodes[row]) {
+	if col >= len(t.nodes[row]) {
 		return nil
 	}
 	if t.nodes[row][col] == nil {
@@ -91,7 +91,7 @@ func (t *RoutingTable) insert(r *routingTableRequest) *routingTableRequest {
 	for i, node := range t.nodes[row][col] {
 		if node.ID.Equals(r.Node.ID) {
 			t.nodes[row][col][i] = node
-			return &routingTableRequest{Mode: mode_set, Node: node, Row: row, Col: col, Entry: i}
+			return nil
 		}
 	}
 	t.nodes[row][col] = append(t.nodes[row][col], r.Node)
@@ -362,6 +362,9 @@ func (t *RoutingTable) dump() []*Node {
 // route is the logic that handles routing messages within the RoutingTable. Messages should never be routed with this method alone. Use the Message.Route method instead.
 func (t *RoutingTable) route(id NodeID) (*Node, error) {
 	row := t.self.ID.CommonPrefixLen(id)
+	if row == len(id) {
+		return nil, nil
+	}
 	col := int(id[row].Canonical())
 	r, err := t.GetByProximity(row, col, 0)
 	if err != nil {
