@@ -3,6 +3,7 @@ package pastry
 import (
 	"log"
 	"os"
+	"time"
 )
 
 type routingTablePosition struct {
@@ -16,7 +17,7 @@ type routingTable struct {
 	self     *Node
 	nodes    [32][16][]*Node
 	kill     chan bool
-	log      log.Logger
+	log      *log.Logger
 	logLevel int
 	timeout  int
 	request  chan interface{}
@@ -25,7 +26,7 @@ type routingTable struct {
 func newRoutingTable(self *Node) *routingTable {
 	return &routingTable{
 		self:     self,
-		nodes:    [32][16]*Node{},
+		nodes:    [32][16][]*Node{},
 		kill:     make(chan bool),
 		log:      log.New(os.Stdout, "pastry#routingTable("+self.ID.String()+")", log.LstdFlags),
 		logLevel: LogLevelWarn,
@@ -40,7 +41,6 @@ func (t *routingTable) stop() {
 
 func (t *routingTable) listen() {
 	for {
-	loop:
 		select {
 		case request := <-t.request:
 			switch request.(type) {
@@ -49,7 +49,7 @@ func (t *routingTable) listen() {
 				if r.strict {
 					t.get(r.id, r.response, r.err)
 				} else {
-					t.getClosest(r.id, r.response, r.err)
+					t.scan(r.id, r.response, r.err)
 				}
 				break
 			case dumpRequest:
@@ -73,7 +73,7 @@ func (t *routingTable) listen() {
 }
 
 func (t *routingTable) insertNode(node Node) (*Node, error) {
-	return t.insertValues(node.id, node.localIP, node.globalIP, node.region, node.port)
+	return t.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port)
 }
 
 func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int) (*Node, error) {
@@ -93,7 +93,7 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 		return node, nil
 	case e := <-err:
 		return nil, e
-	case <-time.After(t.timeout * time.Second):
+	case <-time.After(time.Duration(t.timeout) * time.Second):
 		return nil, throwTimeout("Table insertion", t.timeout)
 	}
 	panic("Should not be reached")
@@ -151,18 +151,18 @@ func (t *routingTable) getNode(id NodeID) (*Node, error) {
 		return node, nil
 	case e := <-err:
 		return nil, e
-	case <-time.After(t.timeout * time.Second):
+	case <-time.After(time.Duration(t.timeout) * time.Second):
 		return nil, throwTimeout("Table retrieval", t.timeout)
 	}
 	panic("Should not be reached")
 	return nil, nil
 }
 
-func (t *routingTable) getClosest(key NodeID) (*Node, error) {
+func (t *routingTable) route(key NodeID) (*Node, error) {
 	resp := make(chan *Node)
 	err := make(chan error)
 	t.request <- getRequest{
-		id:       id,
+		id:       key,
 		strict:   false,
 		err:      err,
 		response: resp,
@@ -172,7 +172,7 @@ func (t *routingTable) getClosest(key NodeID) (*Node, error) {
 		return node, nil
 	case e := <-err:
 		return nil, e
-	case <-time.After(t.tmeout * time.Second):
+	case <-time.After(time.Duration(t.timeout) * time.Second):
 		return nil, throwTimeout("Table routing", t.timeout)
 	}
 	panic("Should not be reached")
@@ -208,7 +208,7 @@ func (t *routingTable) get(id NodeID, resp chan *Node, err chan error) {
 	return
 }
 
-func (t *routingTable) getClosest(id NodeID, resp chan *Node, err chan error) {
+func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 	var node *Node
 	row := t.self.ID.CommonPrefixLen(id)
 	if row >= len(id) {
@@ -221,7 +221,7 @@ func (t *routingTable) getClosest(id NodeID, resp chan *Node, err chan error) {
 		return
 	}
 	if len(t.nodes[row][col]) > 0 {
-		proximity := -1
+		proximity := int64(-1)
 		for _, entry := range t.nodes[row][col] {
 			if proximity == -1 || t.self.Proximity(entry) < proximity {
 				node = entry
@@ -243,7 +243,7 @@ func (t *routingTable) getClosest(id NodeID, resp chan *Node, err chan error) {
 			if n == nil || len(n) < 1 {
 				continue
 			}
-			proximity := -1
+			proximity := int64(-1)
 			for _, entry := range n {
 				if entry == nil {
 					continue
@@ -285,7 +285,7 @@ func (t *routingTable) removeNode(id NodeID) (*Node, error) {
 		return node, nil
 	case e := <-err:
 		return nil, e
-	case <-time.After(t.timeout * time.Second):
+	case <-time.After(time.Duration(t.timeout) * time.Second):
 		return nil, throwTimeout("Table removal", t.timeout)
 	}
 	panic("Should not be reached")
@@ -339,7 +339,7 @@ func (t *routingTable) export() ([]*Node, error) {
 		return nodes, nil
 	case e := <-err:
 		return nil, e
-	case <-time.After(t.timeout * time.Second):
+	case <-time.After(time.Duration(t.timeout) * time.Second):
 		return nil, throwTimeout("Table dump", t.timeout)
 	}
 	panic("Should not be reached")

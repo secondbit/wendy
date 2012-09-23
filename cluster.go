@@ -1,9 +1,11 @@
 package pastry
 
 import (
+	"encoding/json"
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"time"
 )
 
@@ -15,7 +17,7 @@ type Cluster struct {
 	kill               chan bool
 	lastStateUpdate    time.Time
 	applications       []Application
-	log                log.Logger
+	log                *log.Logger
 	logLevel           int
 	heartbeatFrequency int
 	networkTimeout     int
@@ -32,7 +34,7 @@ func (c *Cluster) String() string {
 }
 
 // SetLogger sets the log.Logger that the Cluster, along with its child routingTable and leafSet, will write to.
-func (c *Cluster) SetLogger(l log.Logger) {
+func (c *Cluster) SetLogger(l *log.Logger) {
 	c.log = l
 	c.table.log = l
 	c.leafset.log = l
@@ -112,9 +114,9 @@ func (c *Cluster) Listen(port int) error {
 	for {
 		select {
 		case <-c.kill:
-			return
-		case <-time.After(c.HeartbeatFrequency * time.Second):
-			go sendHeartbeats()
+			return nil
+		case <-time.After(time.Duration(c.heartbeatFrequency) * time.Second):
+			go c.sendHeartbeats()
 		default:
 			conn, err := ln.Accept()
 			if err != nil {
@@ -124,6 +126,7 @@ func (c *Cluster) Listen(port int) error {
 			go c.handleClient(conn)
 		}
 	}
+	return nil
 }
 
 // Send routes a message through the Cluster.
@@ -139,11 +142,12 @@ func (c *Cluster) Send(msg Message) error {
 		}
 	}
 	if target == nil {
-		deliver(msg)
+		c.deliver(msg)
 		return nil
 	}
 	// TODO: Send the message to target
 	// TODO: Update the Node's last seen property
+	return nil
 }
 
 // Join announces a Node's presence to the Cluster, kicking off a process that will populate its child leafSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
@@ -152,6 +156,7 @@ func (c *Cluster) Send(msg Message) error {
 func (c *Cluster) Join(ip string, port int, credentials Credentials) error {
 	// TODO: Build a message announcing the Node's presence
 	// TODO: Send the message to the specified IP and port
+	return nil
 }
 
 func (c *Cluster) fanOutError(err error) {
@@ -180,7 +185,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
 	err := decoder.Decode(&msg)
 	if err != nil {
-		fanOutError(err)
+		c.fanOutError(err)
 		return
 	}
 	// TODO: Update the Node's last seen property

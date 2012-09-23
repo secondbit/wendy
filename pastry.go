@@ -1,5 +1,8 @@
 package pastry
 
+import (
+	"fmt"
+)
 // TimeoutError represents an error that was raised when a call has taken too long. It is its own type for the purposes of handling the error.
 type TimeoutError struct {
 	Action  string
