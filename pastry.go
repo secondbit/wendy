@@ -15,9 +15,9 @@ const mode_scan = reqMode(4)
 const mode_dump = reqMode(5)
 const mode_beat = reqMode(6) // For getting the nodes that need a heartbeat
 
-const LogLevelDebug = 2
+const LogLevelDebug = 0
 const LogLevelWarn = 1
-const LogLevelError = 0
+const LogLevelError = 2
 
 // Application is an interface that other packages can fulfill to hook into Pastry.
 //

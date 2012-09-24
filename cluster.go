@@ -120,8 +120,8 @@ func (c *Cluster) RegisterCallback(app Application) {
 // Listen starts the Cluster listening for events, including all the individual listeners for each state sub-object.
 //
 // Note that Listen does *not* join a Node to the Cluster. The Node must announce its presence before the Node is considered active in the Cluster.
-func (c *Cluster) Listen(port int) error {
-	portstr := strconv.Itoa(port)
+func (c *Cluster) Listen() error {
+	portstr := strconv.Itoa(c.self.Port)
 	go c.table.listen()
 	go c.leafset.listen()
 	ln, err := net.Listen("tcp", ":"+portstr)
@@ -131,19 +131,26 @@ func (c *Cluster) Listen(port int) error {
 		return err
 	}
 	defer ln.Close()
+	connections := make(chan net.Conn)
+	go func(ln net.Listener, ch chan net.Conn) {
+		conn, err := ln.Accept()
+		if err != nil {
+			c.fanOutError(err)
+			return
+		}
+		ch <- conn
+	}(ln, connections)
 	for {
 		select {
 		case <-c.kill:
 			return nil
 		case <-time.After(time.Duration(c.heartbeatFrequency) * time.Second):
+			c.debug("Sending heartbeats.")
 			go c.sendHeartbeats()
-		default:
-			conn, err := ln.Accept()
-			if err != nil {
-				c.fanOutError(err)
-				continue
-			}
-			go c.handleClient(conn)
+			break
+		case conn := <-connections:
+			c.handleClient(conn)
+			break
 		}
 	}
 	return nil
@@ -238,6 +245,7 @@ func (c *Cluster) deliver(msg Message) {
 
 func (c *Cluster) handleClient(conn net.Conn) {
 	defer conn.Close()
+	c.debug("Connection %v received.", conn)
 	var msg Message
 	decoder := json.NewDecoder(conn)
 	err := decoder.Decode(&msg)
@@ -259,7 +267,9 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		node.setProximity(time.Since(msg.Sent).Nanoseconds())
 	}
 	conn.Write([]byte("Received."))
+	c.debug("Connection %v closed.", conn)
 	conn.Close()
+	c.debug("Message purpose: %s", msg.Purpose)
 	switch msg.Purpose {
 	case NODE_JOIN:
 		c.onNodeJoin(msg.Sender)
@@ -273,6 +283,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		}
 		break
 	case STAT_DATA:
+		c.debug("State received!")
 		c.onStateReceived(msg)
 		break
 	case STAT_REQ:
@@ -335,7 +346,8 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 
 // Our message handlers!
 
-func (c *Cluster) onNodeJoin(node Node) {	
+func (c *Cluster) onNodeJoin(node Node) {
+	// TODO: Check credentials
 	c.insert(node)
 	for _, app := range c.applications {
 		app.OnNodeJoin(node)
@@ -383,8 +395,11 @@ func (c *Cluster) onStateReceived(msg Message) {
 		return
 	}
 	for _, node := range state {
+		c.debug("Inserting %s", node.ID)
 		c.insert(node)
 	}
+	c.debug("Inserting %s", msg.Sender.ID)
+	c.insert(msg.Sender)
 }
 
 func (c *Cluster) onStateRequested(node Node) {
@@ -458,19 +473,26 @@ func (c *Cluster) sendStateTables(node Node, table, leafset bool) error {
 }
 
 func (c *Cluster) insert(node Node) {
-	_, err := c.table.insertNode(node)
-	if err != nil {
-		if _, ok := err.(IdentityError); !ok {
-			c.fanOutError(err)
-		}
-	}
-	resp, err := c.leafset.insertNode(node)
+	resp, err := c.table.insertNode(node)
 	if err != nil {
 		if _, ok := err.(IdentityError); !ok {
 			c.fanOutError(err)
 		}
 	}
 	if resp != nil {
+		c.debug("Inserted node %s into the routing table.", resp.ID)
+	}
+	c.debug("Trying to insert %s into the leaf set.", node.ID)
+	resp, err = c.leafset.insertNode(node)
+	if err != nil {
+		if _, ok := err.(IdentityError); !ok {
+			c.fanOutError(err)
+			c.err(err.Error())
+		}
+	}
+	c.debug("Finished trying to insert %s into the leaf set.", node.ID)
+	if resp != nil {
+		c.debug("Inserted node %s into the leaf set.", resp.ID)
 		leaves, err := c.leafset.export()
 		if err != nil {
 			c.fanOutError(err)

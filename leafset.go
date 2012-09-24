@@ -206,6 +206,9 @@ func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
 	best := l.self
 	if side == -1 {
 		for _, node := range l.left {
+			if node == nil {
+				break
+			}
 			diff := key.Diff(node.ID)
 			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
 				best = node
@@ -214,6 +217,9 @@ func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
 		}
 	} else {
 		for _, node := range l.right {
+			if node == nil {
+				break
+			}
 			diff := key.Diff(node.ID)
 			if diff.Cmp(best_score) == -1 || (diff.Cmp(best_score) == 0 && node.ID.Less(best.ID)) {
 				best = node
