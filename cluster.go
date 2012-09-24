@@ -173,7 +173,18 @@ func (c *Cluster) Send(msg Message) error {
 		c.deliver(msg)
 		return nil
 	}
-	return c.send(msg, target)
+	forward := true
+	for _, app := range c.applications {
+		f := app.OnForward(&msg, target.ID)
+		if forward {
+			forward = f
+		}
+	}
+	if forward {
+		return c.send(msg, target)
+	}
+	c.debug("Message %s wasn't forwarded because callback terminated it.", msg.Key)
+	return nil
 }
 
 // Join announces a Node's presence to the Cluster, kicking off a process that will populate its child leafSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
@@ -216,6 +227,10 @@ func (c *Cluster) sendHeartbeats() {
 }
 
 func (c *Cluster) deliver(msg Message) {
+	if msg.Purpose == NODE_JOIN || msg.Purpose == NODE_EXIT || msg.Purpose == HEARTBEAT || msg.Purpose == STAT_DATA || msg.Purpose == STAT_REQ || msg.Purpose == NODE_RACE || msg.Purpose == NODE_REPR {
+		c.warn("Received utility message %s to the deliver function. Purpose was %s.", msg.Key, msg.Purpose)
+		return
+	}
 	for _, app := range c.applications {
 		app.OnDeliver(msg)
 	}
@@ -247,35 +262,30 @@ func (c *Cluster) handleClient(conn net.Conn) {
 	conn.Close()
 	switch msg.Purpose {
 	case NODE_JOIN:
-		// TODO: Add the Node to your state tables
-		// TODO: Notify callbacks if leafSet changed
-		// TODO: Notify callbacks of the new Node
-		// TODO: Send the Node your state tables
+		c.onNodeJoin(msg.Sender)
 		break
 	case NODE_EXIT:
-		// TODO: Remove the Node from your state tables
-		// TODO: Notify callbacks of the departed Node
+		c.onNodeExit(msg.Sender)
 		break
 	case HEARTBEAT:
 		for _, app := range c.applications {
 			app.OnHeartbeat(msg.Sender)
 		}
 		break
-	case STAT_SEND:
-		// TODO: Update your state tables
-		// TODO: Notify callbacks if leafSet changed
+	case STAT_DATA:
+		c.onStateReceived(msg)
 		break
-	case STAT_RECV:
-		// TODO: Send the Node your state tables
+	case STAT_REQ:
+		c.onStateRequested(msg.Sender)
 		break
 	case NODE_RACE:
-		// TODO: Re-request state information
+		c.onRaceCondition(msg.Sender)
 		break
 	case NODE_REPR:
-		// TODO: Send the Node your leaf set
+		c.onRepairRequest(msg.Sender)
 		break
 	default:
-		// TODO: Forward or deliver the message
+		c.onMessageReceived(msg)
 	}
 }
 
@@ -323,19 +333,184 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 	return err
 }
 
+// Our message handlers!
+
+func (c *Cluster) onNodeJoin(node Node) {	
+	c.insert(node)
+	for _, app := range c.applications {
+		app.OnNodeJoin(node)
+	}
+	c.sendStateTables(node, true, true)
+}
+
+func (c *Cluster) onNodeExit(node Node) {
+	c.remove(node.ID)
+	for _, app := range c.applications {
+		app.OnNodeExit(node)
+	}
+}
+
+// BUG(paddy@secondbit.org): If the Nodes don't agree on the time, Pastry can create an infinite loop of sending state information, detecting an erroneous race condition, and requesting state information. For the love of God, use NTP.
+func (c *Cluster) onStateReceived(msg Message) {
+	if c.lastStateUpdate.After(msg.Sent) {
+		c.warn("Detected race condition. %s sent the message at %s, but we last updated our state tables at %s. Notifying %s.", msg.Sender.ID, msg.Sent, msg.Sender.ID)
+		msg := c.NewMessage(NODE_RACE, NodeID{}, []byte{})
+		target, err := c.table.getNode(msg.Sender.ID)
+		if err != nil {
+			if err == nodeNotFoundError {
+				c.insert(msg.Sender)
+			} else if _, ok := err.(IdentityError); ok {
+				c.err("Apparently received state information from myself...?")
+				return
+			} else {
+				c.fanOutError(err)
+			}
+		}
+		if target != nil {
+			err = c.send(msg, target)
+			if err != nil {
+				c.fanOutError(err)
+			}
+		} else {
+			c.err("Node ended up being nil (probably due to errors) when trying to respond to a race condition message.")
+		}
+		return
+	}
+	var state []Node
+	err := json.Unmarshal(msg.Value, &state)
+	if err != nil {
+		c.fanOutError(err)
+		return
+	}
+	for _, node := range state {
+		c.insert(node)
+	}
+}
+
+func (c *Cluster) onStateRequested(node Node) {
+	c.sendStateTables(node, true, true)
+}
+
+func (c *Cluster) onRaceCondition(node Node) {
+	msg := c.NewMessage(STAT_REQ, NodeID{}, []byte{})
+	target, err := c.table.getNode(node.ID)
+	if err != nil {
+		if err == nodeNotFoundError {
+			c.insert(node)
+		} else if _, ok := err.(IdentityError); ok {
+			c.warn("Tried to send race condition warning to self.")
+			return
+		} else {
+			c.fanOutError(err)
+		}
+	}
+	if target != nil {
+		err = c.send(msg, target)
+		if err != nil {
+			c.fanOutError(err)
+		}
+	} else {
+		c.err("Node ended up being nil (probably due to errors) when trying to respond to a race condition message.")
+	}
+}
+
+func (c *Cluster) onRepairRequest(node Node) {
+	c.sendStateTables(node, false, true)
+}
+
+func (c *Cluster) onMessageReceived(msg Message) {
+	err := c.Send(msg)
+	if err != nil {
+		c.fanOutError(err)
+	}
+}
+
+func (c *Cluster) sendStateTables(node Node, table, leafset bool) error {
+	var state []*Node
+	if table {
+		dump, err := c.table.export()
+		if err != nil {
+			return err
+		}
+		state = append(state, dump...)
+	}
+	if leafset {
+		dump, err := c.table.export()
+		if err != nil {
+			return err
+		}
+		state = append(state, dump...)
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	msg := c.NewMessage(STAT_DATA, c.self.ID, data)
+	target, err := c.table.getNode(node.ID)
+	if err != nil {
+		if err == nodeNotFoundError {
+			c.insert(node)
+		} else {
+			return err
+		}
+	}
+	return c.send(msg, target)
+}
+
+func (c *Cluster) insert(node Node) {
+	_, err := c.table.insertNode(node)
+	if err != nil {
+		if _, ok := err.(IdentityError); !ok {
+			c.fanOutError(err)
+		}
+	}
+	resp, err := c.leafset.insertNode(node)
+	if err != nil {
+		if _, ok := err.(IdentityError); !ok {
+			c.fanOutError(err)
+		}
+	}
+	if resp != nil {
+		leaves, err := c.leafset.export()
+		if err != nil {
+			c.fanOutError(err)
+		}
+		for _, app := range c.applications {
+			app.OnNewLeaves(leaves)
+		}
+	}
+	c.lastStateUpdate = time.Now()
+}
+
+// BUG(paddy@secondbit.org): If we happen to remove one of our two neighbours in the leaf set, we will wind up with a hole in the leaf set until we next get a state update. The only fix for this that I can think of involves retrieving results by position from the leaf set, and I'm not eager to complicate things with that if I can avoid it.
 func (c *Cluster) remove(id NodeID) {
 	_, err := c.table.removeNode(id)
-	if err != nodeNotFoundError {
+	if err != nil && err != nodeNotFoundError {
 		if _, ok := err.(IdentityError); !ok {
 			c.fanOutError(err)
 		}
 	}
-	_, err = c.leafset.removeNode(id)
-	if err != nodeNotFoundError {
+	resp, err := c.leafset.removeNode(id)
+	if err != nil && err != nodeNotFoundError {
 		if _, ok := err.(IdentityError); !ok {
 			c.fanOutError(err)
 		}
 	}
+	if resp != nil {
+		leaves, err := c.leafset.export()
+		if err != nil {
+			c.fanOutError(err)
+		}
+		for _, app := range c.applications {
+			app.OnNewLeaves(leaves)
+		}
+		msg := c.NewMessage(NODE_REPR, resp.ID, []byte{})
+		err = c.Send(msg)
+		if err != nil {
+			c.fanOutError(err)
+		}
+	}
+	c.lastStateUpdate = time.Now()
 }
 
 func (c *Cluster) debug(format string, v ...interface{}) {
