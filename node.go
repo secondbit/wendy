@@ -1,8 +1,6 @@
 package pastry
 
 import (
-	"errors"
-	"strconv"
 	"sync"
 	"time"
 )
@@ -64,23 +62,4 @@ func (self *Node) LastHeardFrom() time.Time {
 	self.mutex.Lock()
 	self.mutex.Unlock()
 	return self.lastHeardFrom
-}
-
-// Send transmits a message from the current Node to the specified Node.
-func (self *Node) Send(msg Message, destination *Node) error {
-	if self == nil || destination == nil {
-		return errors.New("Can't send to or from a nil node.")
-	}
-	var address string
-	if destination.Region == self.Region {
-		address = destination.LocalIP + ":" + strconv.Itoa(destination.Port)
-	} else {
-		address = destination.GlobalIP + ":" + strconv.Itoa(destination.Port)
-	}
-	err := msg.send(address)
-	// TODO: Need to update all calls of this to only originate from the routing table.
-	//if err == nil {
-	//	destination.updateLastHeardFrom()
-	//}
-	return err
 }

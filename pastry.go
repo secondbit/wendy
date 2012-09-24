@@ -1,26 +1,9 @@
 package pastry
 
 import (
+	"errors"
 	"fmt"
 )
-// TimeoutError represents an error that was raised when a call has taken too long. It is its own type for the purposes of handling the error.
-type TimeoutError struct {
-	Action  string
-	Timeout int
-}
-
-// Error returns the TimeoutError as a string and fulfills the error interface.
-func (t TimeoutError) Error() string {
-	return fmt.Sprintf("Timeout error: %s took more than %v seconds.", t.Action, t.Timeout)
-}
-
-// throwTimeout creates a new TimeoutError from the action and timeout specified.
-func throwTimeout(action string, timeout int) TimeoutError {
-	return TimeoutError{
-		Action:  action,
-		Timeout: timeout,
-	}
-}
 
 type reqMode int
 
@@ -71,9 +54,9 @@ type Credentials interface {
 // The below types are used in ensuring concurrency safety within the state tables
 
 type getRequest struct {
-	id     NodeID
-	strict bool
-	err    chan error
+	id       NodeID
+	strict   bool
+	err      chan error
 	response chan *Node
 }
 
@@ -82,14 +65,69 @@ type dumpRequest struct {
 }
 
 type removeRequest struct {
-	id NodeID
-	err chan error
+	id       NodeID
+	err      chan error
 	response chan *Node
 }
 
 type insertRequest struct {
-	node *Node
-	err chan error
+	node     *Node
+	err      chan error
 	tablePos chan routingTablePosition
-	leafPos chan leafSetPosition
+	leafPos  chan leafSetPosition
+}
+
+// Errors!
+var deadNodeError = errors.New("Node did not respond to heartbeat.")
+var nodeNotFoundError = errors.New("Node not found.")
+var impossibleError = errors.New("This error should never be reached. It's logically impossible.")
+
+// TimeoutError represents an error that was raised when a call has taken too long. It is its own type for the purposes of handling the error.
+type TimeoutError struct {
+	Action  string
+	Timeout int
+}
+
+// Error returns the TimeoutError as a string and fulfills the error interface.
+func (t TimeoutError) Error() string {
+	return fmt.Sprintf("Timeout error: %s took more than %v seconds.", t.Action, t.Timeout)
+}
+
+// throwTimeout creates a new TimeoutError from the action and timeout specified.
+func throwTimeout(action string, timeout int) TimeoutError {
+	return TimeoutError{
+		Action:  action,
+		Timeout: timeout,
+	}
+}
+
+// IdentityError represents an error that was raised when a Node attempted to perform actions on its state tables using its own ID, which is problematic. It is its own type for the purposes of handling the error.
+type IdentityError struct {
+	Action      string
+	Preposition string
+	Container   string
+}
+
+// Error returns the IdentityError as a string and fulfills the error interface.
+func (e IdentityError) Error() string {
+	return fmt.Sprintf("IdentityError: Tried to %s myself %s the %s.", e.Action, e.Preposition, e.Container)
+}
+
+func throwIdentityError(action, prep, container string) IdentityError {
+	return IdentityError{
+		Action:      action,
+		Preposition: prep,
+		Container:   container,
+	}
+}
+
+// InvalidArgumentError represents an error that is raised when arguments that are invalid are passed to a function that depends on those arguments. It is its own type for the purposes of handling the error.
+type InvalidArgumentError string
+
+func (e InvalidArgumentError) Error() string {
+	return fmt.Sprintf("InvalidArgumentError: %s", e)
+}
+
+func throwInvalidArgumentError(msg string) InvalidArgumentError {
+	return InvalidArgumentError(msg)
 }

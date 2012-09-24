@@ -2,6 +2,8 @@ package pastry
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -85,8 +87,26 @@ func NewCluster(self *Node) *Cluster {
 	}
 }
 
-// Stop shuts down the local connection to the Cluster, removing the local Node from the Cluster and preventing it from receiving or sending further messages.
+// Stop gracefully shuts down the local connection to the Cluster, removing the local Node from the Cluster and preventing it from receiving or sending further messages.
+//
+// Before it disconnects the Node, Stop contacts every Node it knows of to warn them of its departure. If a graceful disconnect is not necessary, Kill should be used instead. Nodes will remove the Node from their state tables next time they attempt to contact it.
 func (c *Cluster) Stop() {
+	msg := c.NewMessage(NODE_EXIT, NodeID{}, []byte{})
+	nodes, err := c.table.export()
+	if err != nil {
+		c.fanOutError(err)
+	}
+	for _, node := range nodes {
+		err = c.send(msg, node)
+		c.fanOutError(err)
+	}
+	c.Kill()
+}
+
+// Kill shuts down the local connection to the Cluster, removing the local Node from the Cluster and preventing it from receiving or sending further messages.
+//
+// Unlike Stop, Kill immediately disconnects the Node without sending a message to let other Nodes know of its exit.
+func (c *Cluster) Kill() {
 	c.table.stop()
 	c.leafset.stop()
 	c.kill <- true
@@ -133,11 +153,19 @@ func (c *Cluster) Listen(port int) error {
 func (c *Cluster) Send(msg Message) error {
 	target, err := c.leafset.route(msg.Key)
 	if err != nil {
+		if _, ok := err.(IdentityError); ok {
+			c.deliver(msg)
+			return nil
+		}
 		return err
 	}
 	if target == nil {
 		target, err = c.table.route(msg.Key)
 		if err != nil {
+			if _, ok := err.(IdentityError); ok {
+				c.deliver(msg)
+				return nil
+			}
 			return err
 		}
 	}
@@ -145,18 +173,20 @@ func (c *Cluster) Send(msg Message) error {
 		c.deliver(msg)
 		return nil
 	}
-	// TODO: Send the message to target
-	// TODO: Update the Node's last seen property
-	return nil
+	return c.send(msg, target)
 }
 
 // Join announces a Node's presence to the Cluster, kicking off a process that will populate its child leafSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
 //
 // The IP and port passed to Join should be those of a known Node in the Cluster. The algorithm assumes that the known Node is close in proximity to the current Node, but that is not a hard requirement.
 func (c *Cluster) Join(ip string, port int, credentials Credentials) error {
-	// TODO: Build a message announcing the Node's presence
-	// TODO: Send the message to the specified IP and port
-	return nil
+	credentialsJSON, err := json.Marshal(credentials)
+	if err != nil {
+		return err
+	}
+	msg := c.NewMessage(NODE_JOIN, c.self.ID, credentialsJSON)
+	address := ip + ":" + strconv.Itoa(port)
+	return c.sendToIP(msg, address)
 }
 
 func (c *Cluster) fanOutError(err error) {
@@ -166,11 +196,23 @@ func (c *Cluster) fanOutError(err error) {
 }
 
 func (c *Cluster) sendHeartbeats() {
-	// TODO: Build a heartbeat message
-	// TODO: Acquire a list of Nodes to send a heartbeat to
-	// TODO: Loop through a list of Nodes and send a heartbeat message
-	// TODO: Update the Node's last seen property
-	// TODO: Remove dead nodes
+	msg := c.NewMessage(HEARTBEAT, NodeID{}, []byte{})
+	nodes, err := c.table.export()
+	if err != nil {
+		c.fanOutError(err)
+	}
+	for _, node := range nodes {
+		err = c.send(msg, node)
+		if err == deadNodeError {
+			_, err := c.table.removeNode(node.ID)
+			if err != nil && err != nodeNotFoundError {
+				if _, ok := err.(IdentityError); !ok {
+					c.fanOutError(err)
+				}
+			}
+			continue
+		}
+	}
 }
 
 func (c *Cluster) deliver(msg Message) {
@@ -188,14 +230,112 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		c.fanOutError(err)
 		return
 	}
-	// TODO: Update the Node's last seen property
-	// TODO: Update the Node's proximity metric
-	// TODO: Switch amongst types of messages, and handle them
+	node, err := c.table.getNode(msg.Sender.ID)
+	if err == nodeNotFoundError {
+		node, err = c.table.insertNode(msg.Sender)
+		if err != nil {
+			if _, ok := err.(IdentityError); !ok {
+				c.fanOutError(err)
+			}
+		}
+	}
+	if node != nil {
+		node.updateLastHeardFrom()
+		node.setProximity(time.Since(msg.Sent).Nanoseconds())
+	}
+	conn.Write([]byte("Received."))
+	conn.Close()
+	switch msg.Purpose {
+	case NODE_JOIN:
+		// TODO: Add the Node to your state tables
+		// TODO: Notify callbacks if leafSet changed
+		// TODO: Notify callbacks of the new Node
+		// TODO: Send the Node your state tables
+		break
+	case NODE_EXIT:
+		// TODO: Remove the Node from your state tables
+		// TODO: Notify callbacks of the departed Node
+		break
+	case HEARTBEAT:
+		for _, app := range c.applications {
+			app.OnHeartbeat(msg.Sender)
+		}
+		break
+	case STAT_SEND:
+		// TODO: Update your state tables
+		// TODO: Notify callbacks if leafSet changed
+		break
+	case STAT_RECV:
+		// TODO: Send the Node your state tables
+		break
+	case NODE_RACE:
+		// TODO: Re-request state information
+		break
+	case NODE_REPR:
+		// TODO: Send the Node your leaf set
+		break
+	default:
+		// TODO: Forward or deliver the message
+	}
+}
+
+
+func (c *Cluster) send(msg Message, destination *Node) error {
+	if c.self == nil || destination == nil {
+		return errors.New("Can't send to or from a nil node.")
+	}
+	var address string
+	if destination.Region == c.self.Region {
+		address = destination.LocalIP + ":" + strconv.Itoa(destination.Port)
+	} else {
+		address = destination.GlobalIP + ":" + strconv.Itoa(destination.Port)
+	}
+	err := c.sendToIP(msg, address)
+	if err == nil {
+		destination.updateLastHeardFrom()
+	}
+	return err
+}
+
+func (c *Cluster) sendToIP(msg Message, address string) error {
+	conn, err := net.DialTimeout("tcp", address, time.Duration(c.networkTimeout) * time.Second)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	conn.SetWriteDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
+	conn.SetReadDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
+	encoder := json.NewEncoder(conn)
+	err = encoder.Encode(msg)
+	if err != nil {
+		return err
+	}
+	var result []byte
+	_, err = conn.Read(result)
+	if err != nil {
+		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
+			return deadNodeError
+		}
+		if err == io.EOF {
+			err = nil
+		}
+	}
+	return err
 }
 
 func (c *Cluster) remove(id NodeID) {
-	// TODO: Remove Node from routingTable by ID
-	// TODO: Remove Node from leafSet by ID
+	_, err := c.table.removeNode(id)
+	if err != nodeNotFoundError {
+		if _, ok := err.(IdentityError); !ok {
+			c.fanOutError(err)
+		}
+	}
+	_, err = c.leafset.removeNode(id)
+	if err != nodeNotFoundError {
+		if _, ok := err.(IdentityError); !ok {
+			c.fanOutError(err)
+		}
+	}
 }
 
 func (c *Cluster) debug(format string, v ...interface{}) {

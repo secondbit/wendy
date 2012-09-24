@@ -62,8 +62,8 @@ func (l *leafSet) listen() {
 				l.insert(r.node, r.leafPos, r.err)
 				break
 			case removeRequest:
-				//r := request.(removeRequest)
-				// TODO: remove node
+				r := request.(removeRequest)
+				l.remove(r.id, r.response, r.err)
 				break
 			}
 			break
@@ -103,7 +103,8 @@ func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port
 
 func (l *leafSet) insert(node *Node, poschan chan leafSetPosition, errchan chan error) {
 	if node == nil {
-		// TODO: throw an invalid argument error
+		errchan <- throwInvalidArgumentError("Can't insert a nil Node into the leaf set.")
+		return
 	}
 	var pos int
 	var inserted bool
@@ -129,7 +130,7 @@ func (l *leafSet) insert(node *Node, poschan chan leafSetPosition, errchan chan 
 			return
 		}
 	}
-	// TODO: throw an error
+	errchan <- throwIdentityError("insert", "into", "leaf set")
 	return
 }
 
@@ -191,8 +192,11 @@ func (l *leafSet) get(id NodeID, resp chan *Node, err chan error) {
 				return
 			}
 		}
+	} else {
+		err <- throwIdentityError("get", "from", "leaf set")
+		return
 	}
-	// TODO: throw an error
+	err <- nodeNotFoundError
 	return
 }
 
@@ -220,8 +224,11 @@ func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
 	if !best.ID.Equals(l.self.ID) {
 		resp <- best
 		return
+	} else {
+		err <- throwIdentityError("route to", "in", "leaf set")
+		return
 	}
-	// TODO: throw an error
+	err <- nodeNotFoundError
 	return
 }
 
@@ -290,8 +297,32 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int
 	return result, pos, inserted
 }
 
+func (l *leafSet) removeNode(id NodeID) (*Node, error) {
+	resp := make(chan *Node)
+	err := make(chan error)
+	l.request <- removeRequest{
+		id: id,
+		err: err,
+		response: resp,
+	}
+	select {
+	case node := <-resp:
+		return node, nil
+	case e:= <-err:
+		return nil, e
+	case <-time.After(time.Duration(l.timeout) * time.Second):
+		return nil, throwTimeout("LeafSet removal", l.timeout)
+	}
+	panic("Should not be reached")
+	return nil, nil
+}
+
 func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 	side := l.self.ID.RelPos(id)
+	if side == 0 {
+		err <- throwIdentityError("remove", "from", "leaf set")
+		return
+	}
 	pos := -1
 	var n *Node
 	if side == -1 {
@@ -311,8 +342,8 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 			}
 		}
 	}
-	if pos == -1 || (side == -1 && pos > len(l.left)) || (side == 1 && pos > len(l.right)) || side == 0 {
-		// TODO: throw an error
+	if pos == -1 || (side == -1 && pos > len(l.left)) || (side == 1 && pos > len(l.right)) {
+		err <- nodeNotFoundError
 		return
 	}
 	var slice []*Node

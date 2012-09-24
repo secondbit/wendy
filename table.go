@@ -102,15 +102,18 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 
 func (t *routingTable) insert(node *Node, poschan chan routingTablePosition, errchan chan error) {
 	if node == nil {
-		// TODO throw an invalid argument error
+		errchan <- throwInvalidArgumentError("Can't insert a nil Node into the routing table.")
+		return
 	}
 	row := t.self.ID.CommonPrefixLen(node.ID)
 	if row >= len(t.nodes) {
-		// TODO throw an error
+		errchan <- throwIdentityError("insert", "into", "routing table")
+		return
 	}
 	col := int(node.ID[row].Canonical())
 	if col >= len(t.nodes[row]) {
-		// TODO throw an error
+		errchan <- impossibleError
+		return
 	}
 	if t.nodes[row][col] == nil {
 		t.nodes[row][col] = []*Node{}
@@ -182,12 +185,12 @@ func (t *routingTable) route(key NodeID) (*Node, error) {
 func (t *routingTable) get(id NodeID, resp chan *Node, err chan error) {
 	row := t.self.ID.CommonPrefixLen(id)
 	if row >= len(id) {
-		// TODO: Throw an error
+		err <- throwIdentityError("get", "from", "routing table")
 		return
 	}
 	col := int(id[row].Canonical())
 	if col >= len(t.nodes[row]) {
-		// TODO: Throw an error
+		err <- impossibleError
 		return
 	}
 	entry := -1
@@ -197,11 +200,11 @@ func (t *routingTable) get(id NodeID, resp chan *Node, err chan error) {
 		}
 	}
 	if entry < 0 {
-		// TODO: Throw an error
+		err <- nodeNotFoundError
 		return
 	}
 	if entry > len(t.nodes[row][col]) {
-		// TODO: Throw an error
+		err <- impossibleError
 		return
 	}
 	resp <- t.nodes[row][col][entry]
@@ -212,12 +215,12 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 	var node *Node
 	row := t.self.ID.CommonPrefixLen(id)
 	if row >= len(id) {
-		// TODO: Throw an error
+		err <- throwIdentityError("route to", "in", "routing table")
 		return
 	}
 	col := int(id[row].Canonical())
 	if col >= len(t.nodes[row]) {
-		// TODO: Throw an error
+		err <- impossibleError
 		return
 	}
 	if len(t.nodes[row][col]) > 0 {
@@ -228,11 +231,10 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 				proximity = t.self.Proximity(entry)
 			}
 		}
-		if proximity == -1 {
-			// TODO: Throw an error
+		if proximity > -1 {
+			resp <- node
+			return
 		}
-		resp <- node
-		return
 	}
 	diff := t.self.ID.Diff(id)
 	for scan_row := row; scan_row < len(t.nodes); scan_row++ {
@@ -261,14 +263,15 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 			}
 			if node != nil {
 				if proximity == -1 {
-					// TODO: Throw an error
+					err <- nodeNotFoundError
+					return
 				}
 				resp <- node
 				return
 			}
 		}
 	}
-	// TODO: Throw an error
+	err <- nodeNotFoundError
 	return
 }
 
@@ -297,11 +300,12 @@ func (t *routingTable) remove(id NodeID, resp chan *Node, err chan error) {
 	entry = -1
 	row = t.self.ID.CommonPrefixLen(id)
 	if row >= len(id) {
-		// TODO: Throw error
+		err <- throwIdentityError("remove", "from", "routing table")
+		return
 	}
 	col = int(id[row].Canonical())
 	if col > len(t.nodes[row]) {
-		// TODO: Throw error
+		err <- impossibleError
 	}
 	for i, n := range t.nodes[row][col] {
 		if n.ID.Equals(id) {
@@ -309,7 +313,8 @@ func (t *routingTable) remove(id NodeID, resp chan *Node, err chan error) {
 		}
 	}
 	if entry < 0 {
-		// TODO: Throw erorr
+		err <- nodeNotFoundError
+		return
 	}
 	resp <- t.nodes[row][col][entry]
 	if len(t.nodes[row][col]) == 1 {
