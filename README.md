@@ -10,11 +10,11 @@ Pastry was developed on OS X 10.8.1, using Go 1.0.3. It has been verified to wor
 
 ## Installation
 
-The typical `go get github.com/secondbit/pastry` will install Pastry.
+The typical `go get secondbit.org/pastry` will install Pastry.
 
 ## Documentation
 
-We took pains to try and follow [the guidelines](http://golang.org/doc/articles/godoc_documenting_go_code.html "Godoc guidelines on golang.org") on writing good documentation for `godoc`. You can view the generated documentation on the excellent [GoPkgDoc](http://go.pkgdoc.org/github.com/secondbit/pastry "Pastry's documentation on GoPkgDoc").
+We took pains to try and follow [the guidelines](http://golang.org/doc/articles/godoc_documenting_go_code.html "Godoc guidelines on golang.org") on writing good documentation for `godoc`. You can view the generated documentation on the excellent [GoPkgDoc](http://go.pkgdoc.org/secondbit.org/pastry "Pastry's documentation on GoPkgDoc").
 
 ## Use
 
