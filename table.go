@@ -87,7 +87,7 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 	}
 	select {
 	case p := <-pos:
-		if p.inserted {
+		if !p.inserted {
 			return nil, nil
 		}
 		return node, nil

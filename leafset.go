@@ -3,6 +3,7 @@ package pastry
 import (
 	"log"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -42,8 +43,12 @@ func (l *leafSet) stop() {
 
 func (l *leafSet) listen() {
 	for {
+		runtime.Gosched()
 		select {
-		case request := <-l.request:
+		case request, ok := <-l.request:
+			if !ok {
+				panic("Listen channel closed?")
+			}
 			switch request.(type) {
 			case getRequest:
 				r := request.(getRequest)
@@ -58,6 +63,7 @@ func (l *leafSet) listen() {
 				l.dump(r.response)
 				break
 			case insertRequest:
+				l.debug("Insert request routed.")
 				r := request.(insertRequest)
 				l.insert(r.node, r.leafPos, r.err)
 				break
@@ -67,7 +73,10 @@ func (l *leafSet) listen() {
 				break
 			}
 			break
-		case <-l.kill:
+		case _, ok := <-l.kill:
+			if !ok {
+				panic("kill channel closed?")
+			}
 			return
 		}
 	}
@@ -78,6 +87,7 @@ func (l *leafSet) insertNode(node Node) (*Node, error) {
 }
 
 func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port int) (*Node, error) {
+	l.debug("Insert request received.")
 	node := NewNode(id, localIP, globalIP, region, port)
 	pos := make(chan leafSetPosition)
 	err := make(chan error)
@@ -86,15 +96,19 @@ func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port
 		err: err,
 		leafPos: pos,
 	}
+	l.debug("Request sent.")
 	select {
 	case p := <-pos:
-		if p.inserted {
+		l.debug("Response received.")
+		if !p.inserted {
 			return nil, nil
 		}
 		return node, nil
 	case e := <-err:
+		l.debug("Error received.")
 		return nil, e
 	case <-time.After(time.Duration(l.timeout) * time.Second):
+		l.debug("Timeout received.")
 		return nil, throwTimeout("LeafSet insertion", l.timeout)
 	}
 	panic("Should not be reached")
@@ -102,7 +116,9 @@ func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port
 }
 
 func (l *leafSet) insert(node *Node, poschan chan leafSetPosition, errchan chan error) {
+	l.debug("Inserting...")
 	if node == nil {
+		l.debug("Node is nil. Throwing invalid argument error.")
 		errchan <- throwInvalidArgumentError("Can't insert a nil Node into the leaf set.")
 		return
 	}
@@ -110,26 +126,33 @@ func (l *leafSet) insert(node *Node, poschan chan leafSetPosition, errchan chan 
 	var inserted bool
 	side := l.self.ID.RelPos(node.ID)
 	if side == -1 {
+		l.debug("Node goes on the left.")
 		l.left, pos, inserted = node.insertIntoArray(l.left, l.self)
 		if pos > -1 {
+			l.debug("Replying to request...")
 			poschan <- leafSetPosition{
 				pos: pos,
 				left: true,
 				inserted: inserted,
 			}
+			l.debug("Replied to request.")
 			return
 		}
 	} else if side == 1 {
+		l.debug("Node goes on the right.")
 		l.right, pos, inserted = node.insertIntoArray(l.right, l.self)
 		if pos > -1 {
+			l.debug("Replying to request...")
 			poschan <- leafSetPosition{
 				pos: pos,
 				left: false,
 				inserted: inserted,
 			}
+			l.debug("Replied to request")
 			return
 		}
 	}
+	l.debug("Oops, tried to insert myself in my own leafset. Throwing IdentityError.")
 	errchan <- throwIdentityError("insert", "into", "leaf set")
 	return
 }
@@ -201,6 +224,8 @@ func (l *leafSet) get(id NodeID, resp chan *Node, err chan error) {
 }
 
 func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
+	defer close(resp)
+	defer close(err)
 	side := l.self.ID.RelPos(key)
 	best_score := l.self.ID.Diff(key)
 	best := l.self
@@ -289,6 +314,8 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, int
 		}
 		if node.ID.Equals(array[src_index].ID) {
 			pos = result_index
+			result_index += 1
+			src_index += 1
 			continue
 		}
 		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 && pos < 0 {
@@ -333,7 +360,7 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 	var n *Node
 	if side == -1 {
 		for index, node := range l.left {
-			if node.ID.Equals(id) {
+			if node == nil || node.ID.Equals(id) {
 				pos = index
 				n = node
 				break
@@ -341,7 +368,7 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 		}
 	} else {
 		for index, node := range l.right {
-			if node.ID.Equals(id) {
+			if node == nil || node.ID.Equals(id) {
 				pos = index
 				n = node
 				break
@@ -390,4 +417,23 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 	}
 	resp <- n
 	return
+}
+
+func (l *leafSet) debug(format string, v ...interface{}) {
+	if l.logLevel <= LogLevelDebug {
+		l.log.Printf("log level: %d", l.logLevel)
+		l.log.Printf(format, v...)
+	}
+}
+
+func (l *leafSet) warn(format string, v ...interface{}) {
+	if l.logLevel <= LogLevelWarn {
+		l.log.Printf(format, v...)
+	}
+}
+
+func (l *leafSet) err(format string, v ...interface{}) {
+	if l.logLevel <= LogLevelError {
+		l.log.Printf(format, v...)
+	}
 }
