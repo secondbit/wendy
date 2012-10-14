@@ -82,7 +82,6 @@ func TestRoutingTableDoubleInsert(t *testing.T) {
 	}
 }
 
-/*
 // Test deleting the only node from column of the routing table
 func TestRoutingTableDeleteOnly(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
@@ -96,29 +95,27 @@ func TestRoutingTableDeleteOnly(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
-	r, err := table.Insert(other)
+	defer table.stop()
+	r, err := table.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	if r == nil {
 		t.Fatalf("Nil response returned.")
 	}
-	_, err = table.Remove(r.Node, 0, 0, 0)
+	_, err = table.removeNode(other_id)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	r3, err := table.Get(r.Node, 0, 0, 0)
-	if err != nil {
+	_, err = table.getNode(r.ID)
+	if err != nodeNotFoundError {
 		t.Fatalf(err.Error())
-	}
-	if r3 != nil {
-		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
 	}
 }
 
+/*
 // Test deleting the first of two nodes from a column of the routing table
 func TestRoutingTableDeleteFirst(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
