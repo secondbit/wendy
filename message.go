@@ -17,7 +17,7 @@ const NODE_JOIN = byte(0) // Used when a Node joins the cluster
 const NODE_EXIT = byte(1) // Used when a Node leaves the cluster
 const HEARTBEAT = byte(2) // Used when a Node is being tested
 const STAT_DATA = byte(3) // Used when a Node broadcasts state info
-const STAT_REQ  = byte(4) // Used when a Node is requesting state info
+const STAT_REQ = byte(4)  // Used when a Node is requesting state info
 const NODE_RACE = byte(5) // Used when a Node hits a race condition
 const NODE_REPR = byte(6) // Used when a Node needs to repair its LeafSet
 
@@ -29,9 +29,9 @@ func (m *Message) String() string {
 func (c *Cluster) NewMessage(purpose byte, key NodeID, value []byte) Message {
 	return Message{
 		Purpose: purpose,
-		Sender: *c.self,
-		Key: key,
-		Value: value,
-		Sent: time.Now(),
+		Sender:  *c.self,
+		Key:     key,
+		Value:   value,
+		Sent:    time.Now(),
 	}
 }

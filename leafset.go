@@ -14,26 +14,26 @@ type leafSetPosition struct {
 }
 
 type leafSet struct {
-	self *Node
-	left [16]*Node
-	right [16]*Node
-	kill chan bool
-	log *log.Logger
+	self     *Node
+	left     [16]*Node
+	right    [16]*Node
+	kill     chan bool
+	log      *log.Logger
 	logLevel int
-	timeout int
-	request chan interface{}
+	timeout  int
+	request  chan interface{}
 }
 
 func newLeafSet(self *Node) *leafSet {
 	return &leafSet{
-		self: self,
-		left: [16]*Node{},
-		right: [16]*Node{},
-		kill: make(chan bool),
-		log: log.New(os.Stdout, "pastry#leafSet("+self.ID.String()+")", log.LstdFlags),
+		self:     self,
+		left:     [16]*Node{},
+		right:    [16]*Node{},
+		kill:     make(chan bool),
+		log:      log.New(os.Stdout, "pastry#leafSet("+self.ID.String()+")", log.LstdFlags),
 		logLevel: LogLevelWarn,
-		timeout: 1,
-		request: make(chan interface{}),
+		timeout:  1,
+		request:  make(chan interface{}),
 	}
 }
 
@@ -92,8 +92,8 @@ func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port
 	pos := make(chan leafSetPosition)
 	err := make(chan error)
 	l.request <- insertRequest{
-		node: node,
-		err: err,
+		node:    node,
+		err:     err,
 		leafPos: pos,
 	}
 	l.debug("Request sent.")
@@ -131,8 +131,8 @@ func (l *leafSet) insert(node *Node, poschan chan leafSetPosition, errchan chan 
 		if pos > -1 {
 			l.debug("Replying to request...")
 			poschan <- leafSetPosition{
-				pos: pos,
-				left: true,
+				pos:      pos,
+				left:     true,
 				inserted: inserted,
 			}
 			l.debug("Replied to request.")
@@ -144,8 +144,8 @@ func (l *leafSet) insert(node *Node, poschan chan leafSetPosition, errchan chan 
 		if pos > -1 {
 			l.debug("Replying to request...")
 			poschan <- leafSetPosition{
-				pos: pos,
-				left: false,
+				pos:      pos,
+				left:     false,
 				inserted: inserted,
 			}
 			l.debug("Replied to request")
@@ -161,15 +161,15 @@ func (l *leafSet) getNode(id NodeID) (*Node, error) {
 	resp := make(chan *Node)
 	err := make(chan error)
 	l.request <- getRequest{
-		id: id,
-		strict: true,
-		err: err,
+		id:       id,
+		strict:   true,
+		err:      err,
 		response: resp,
 	}
 	select {
 	case node := <-resp:
 		return node, nil
-	case e:= <-err:
+	case e := <-err:
 		return nil, e
 	case <-time.After(time.Duration(l.timeout) * time.Second):
 		return nil, throwTimeout("LeafSet retrieval", l.timeout)
@@ -182,9 +182,9 @@ func (l *leafSet) route(key NodeID) (*Node, error) {
 	resp := make(chan *Node)
 	err := make(chan error)
 	l.request <- getRequest{
-		id: key,
-		strict: false,
-		err: err,
+		id:       key,
+		strict:   false,
+		err:      err,
 		response: resp,
 	}
 	select {
@@ -334,14 +334,14 @@ func (l *leafSet) removeNode(id NodeID) (*Node, error) {
 	resp := make(chan *Node)
 	err := make(chan error)
 	l.request <- removeRequest{
-		id: id,
-		err: err,
+		id:       id,
+		err:      err,
 		response: resp,
 	}
 	select {
 	case node := <-resp:
 		return node, nil
-	case e:= <-err:
+	case e := <-err:
 		return nil, e
 	case <-time.After(time.Duration(l.timeout) * time.Second):
 		return nil, throwTimeout("LeafSet removal", l.timeout)
@@ -383,7 +383,7 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 	if side == -1 {
 		if len(l.left) == 1 {
 			slice = []*Node{}
-		} else if pos + 1 == len(l.left) {
+		} else if pos+1 == len(l.left) {
 			slice = l.left[:pos]
 		} else if pos == 0 {
 			slice = l.left[1:]
@@ -400,7 +400,7 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 	} else {
 		if len(l.right) == 1 {
 			slice = []*Node{}
-		} else if pos + 1 == len(l.right) {
+		} else if pos+1 == len(l.right) {
 			slice = l.right[:pos]
 		} else if pos == 0 {
 			slice = l.right[1:]
