@@ -52,10 +52,15 @@ NewNode expects five parameters:
 Once you have a Node, you can join the Cluster.
 
 ```go
-cluster := pastry.NewCluster(node)
+cluster := pastry.NewCluster(node, credentials)
 ```
 
-NewCluster just creates a Cluster object, initialises the state tables and channels used to keep the algorithm concurrency-safe, and returns it.
+NewCluster just creates a Cluster object, initialises the state tables and channels used to keep the algorithm concurrency-safe, and returns it. It requires that you specify the current Node and supply [Credentials](http://go.pkgdoc.org/secondbit.org/pastry#Credentials) for the Cluster.
+
+Credentials are an interface that Pastry defines to help control access to your clusters. Credentials could be whatever you want them to be: public/private keys, a single word or phrase, a rather large number... anything at all is fair game. The only rules for Credentials are as follows:
+
+1. They must marshal to and from JSON. That means a `MarshalJSON()` function that returns a slice of bytes and an error, and an `UnmarshalJSON([]byte)` function that returns an error.
+2. They must have a `Valid` method that accepts another instance of Credentials and returns a boolean. When a node attempts to join the cluster, its Credentials will be marshalled to JSON, transferred with the request, unmarshalled with JSON, and passed to the Valid method on the target Node. If that Valid method returns true, the Node will be allowed to join the Cluster. Otherwise, the Node will be excluded from the Cluster.
 
 ### Listening For Messages
 
@@ -112,6 +117,18 @@ cluster.RegisterCallback(app)
 ```
 
 The methods will be invoked at the appropriate points in the lifecycle of the cluster. You should consult [the documentation](http://go.pkgdoc.org/secondbit.org/pastry#Application) for more information.
+
+### Announcing Your Presence
+
+Finally, to join a Cluster that has already been formed (which you'll want to do, unless this is the first server in the group you're standing up), you're going to need to use the `Join` method to announce your presence and initialise your state tables. The `Join` method is simple:
+
+```go
+cluster.Join("127.0.0.1", 8080)
+```
+
+The first parameter is simply the IP address of a known Node in the Cluster, as a string. The second is just the port, as an int.
+
+When `Join()` is called, the Node will contact the specified Node and announce its presence. The specified Node will send the joining Node its state tables and route the join message to the other Nodes in the Cluster, who will also send the joining Node their state tables. These state tables will initialise the joining Node's state tables, allowing it to participate in the Cluster.
 
 ## Contributing
 

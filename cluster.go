@@ -23,6 +23,7 @@ type Cluster struct {
 	logLevel           int
 	heartbeatFrequency int
 	networkTimeout     int
+	credentials        Credentials
 }
 
 // ID returns an identifier for the Cluster. It uses the ID of the current Node.
@@ -72,7 +73,7 @@ func (c *Cluster) SetChannelTimeouts(timeout int) {
 }
 
 // NewCluster creates a new instance of a connection to the network and intialises the state tables and channels it requires.
-func NewCluster(self *Node) *Cluster {
+func NewCluster(self *Node, credentials Credentials) *Cluster {
 	return &Cluster{
 		self:               self,
 		table:              newRoutingTable(self),
@@ -213,8 +214,8 @@ func (c *Cluster) Send(msg Message) error {
 // Join announces a Node's presence to the Cluster, kicking off a process that will populate its child leafSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
 //
 // The IP and port passed to Join should be those of a known Node in the Cluster. The algorithm assumes that the known Node is close in proximity to the current Node, but that is not a hard requirement.
-func (c *Cluster) Join(ip string, port int, credentials Credentials) error {
-	credentialsJSON, err := json.Marshal(credentials)
+func (c *Cluster) Join(ip string, port int) error {
+	credentialsJSON, err := json.Marshal(c.credentials)
 	if err != nil {
 		return err
 	}
@@ -356,19 +357,25 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 // Our message handlers!
 
 func (c *Cluster) onNodeJoin(msg Message) {
-	// TODO: Check credentials
-	c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
-	err := c.Send(msg)
+	var creds Credentials
+	err := json.Unmarshal(msg.Value, &creds)
 	if err != nil {
 		c.fanOutError(err)
 	}
-	c.insert(msg.Sender)
-	err = c.sendStateTables(msg.Sender, true, true)
-	if err != nil {
-		if err == deadNodeError {
-			c.remove(msg.Sender.ID)
-		} else {
+	if c.credentials.Valid(creds) {
+		c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
+		err := c.Send(msg)
+		if err != nil {
 			c.fanOutError(err)
+		}
+		c.insert(msg.Sender)
+		err = c.sendStateTables(msg.Sender, true, true)
+		if err != nil {
+			if err == deadNodeError {
+				c.remove(msg.Sender.ID)
+			} else {
+				c.fanOutError(err)
+			}
 		}
 	}
 }
