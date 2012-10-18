@@ -1,12 +1,12 @@
 package pastry
 
 import (
-	//"crypto/rand"
-	//"io"
-	//"strconv"
-	//"sync"
+	"crypto/rand"
+	"io"
+	"strconv"
+	"sync"
 	"testing"
-	//"time"
+	"time"
 )
 
 // Test insertion of a node into the routing table
@@ -111,11 +111,14 @@ func TestRoutingTableDeleteOnly(t *testing.T) {
 	}
 	_, err = table.getNode(r.ID)
 	if err != nodeNotFoundError {
-		t.Fatalf(err.Error())
+		if err != nil {
+			t.Fatalf(err.Error())
+		} else {
+			t.Fatal("Expected nodeNotFoundError, got nil instead.")
+		}
 	}
 }
 
-/*
 // Test deleting the first of two nodes from a column of the routing table
 func TestRoutingTableDeleteFirst(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("1234567890abcdef"))
@@ -134,52 +137,47 @@ func TestRoutingTableDeleteFirst(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
-	r, err := table.Insert(other)
+	defer table.stop()
+	r, err := table.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	if r == nil {
 		t.Fatalf("Nil response returned.")
 	}
-	r2, err := table.Insert(second)
+	r2, err := table.insertNode(*second)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if r2 == nil {
 		t.Fatal("Nil response returned.")
 	}
-	if r.Row != r2.Row {
-		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
-	}
-	if r.Col != r2.Col {
-		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
-	}
-	if r2.Entry != 1 {
-		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
-	}
-	_, err = table.Remove(r.Node, 0, 0, 0)
+	r3, err := table.removeNode(other_id)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	r3, err := table.Get(r.Node, 0, 0, 0)
-	if err != nil {
-		t.Fatalf(err.Error())
+	if r3 == nil {
+		t.Fatalf("Remove didn't remove a node.")
 	}
-	if r3 != nil {
-		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	r4, err := table.getNode(other_id)
+	if err != nodeNotFoundError {
+		if err != nil {
+			t.Fatalf(err.Error())
+		} else {
+			t.Fatal("Expected nodeNotFoundError, got nil error instead.")
+		}
 	}
-	r4, err := table.Get(r2.Node, 0, 0, 0)
+	if r4 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r4.ID)
+	}
+	r5, err := table.getNode(second_id)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	if r4 == nil {
+	if r5 == nil {
 		t.Fatalf("Got nil response when querying for second insert.")
-	}
-	if r4.Entry != 0 {
-		t.Errorf("Expected second insert to be in position 0, got %v instead.", r4.Entry)
 	}
 }
 
@@ -201,52 +199,47 @@ func TestRoutingTableDeleteLast(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
-	r, err := table.Insert(other)
+	defer table.stop()
+	r, err := table.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	if r == nil {
 		t.Fatalf("Nil response returned.")
 	}
-	r2, err := table.Insert(second)
+	r2, err := table.insertNode(*second)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if r2 == nil {
 		t.Fatal("Nil response returned.")
 	}
-	if r.Row != r2.Row {
-		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
-	}
-	if r.Col != r2.Col {
-		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
-	}
-	if r2.Entry != 1 {
-		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
-	}
-	_, err = table.Remove(r2.Node, 0, 0, 0)
+	r3, err := table.removeNode(second_id)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	r3, err := table.Get(r2.Node, 0, 0, 0)
-	if err != nil {
-		t.Fatalf(err.Error())
+	if r3 == nil {
+		t.Fatalf("Expected nil response, got Node %s", r3.ID)
 	}
-	if r3 != nil {
-		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	r4, err := table.getNode(second_id)
+	if err != nodeNotFoundError {
+		if err != nil {
+			t.Fatalf(err.Error())
+		} else {
+			t.Fatalf("Expected nodeNotFoundError, got nil error instead.")
+		}
 	}
-	r4, err := table.Get(r.Node, 0, 0, 0)
+	if r4 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r4.ID)
+	}
+	r5, err := table.getNode(other_id)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	if r4 == nil {
+	if r5 == nil {
 		t.Fatalf("Got nil response when querying for first insert.")
-	}
-	if r4.Entry != 0 {
-		t.Errorf("Expected first insert to be in position 0, got %v instead.", r4.Entry)
 	}
 }
 
@@ -273,81 +266,65 @@ func TestRoutingTableDeleteMiddle(t *testing.T) {
 		t.Fatalf(err.Error())
 	}
 	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
-	r, err := table.Insert(other)
+	defer table.stop()
+	r, err := table.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	if r == nil {
 		t.Fatalf("Nil response returned.")
 	}
-	r2, err := table.Insert(second)
+	r2, err := table.insertNode(*second)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if r2 == nil {
 		t.Fatal("Nil response returned.")
 	}
-	if r.Row != r2.Row {
-		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r.Row, r2.Row)
-	}
-	if r.Col != r2.Col {
-		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r.Col, r2.Col)
-	}
-	if r2.Entry != 1 {
-		t.Fatalf("Second insert didn't get added to the end of the column. Expected 1, got %v.", r2.Entry)
-	}
-	r3, err := table.Insert(third)
+	r3, err := table.insertNode(*third)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if r3 == nil {
 		t.Fatal("Nil response returned.")
 	}
-	if r3.Row != r2.Row {
-		t.Fatalf("Nodes not inserted in the same row. Expected %v, got %v.", r2.Row, r3.Row)
-	}
-	if r3.Col != r2.Col {
-		t.Fatalf("Nodes not inserted in the same column. Expected %v, got %v.", r2.Col, r3.Col)
-	}
-	if r3.Entry != 2 {
-		t.Fatalf("Third insert didn't get added to the end of the column. Expected 2, got %v.", r3.Entry)
-	}
-	_, err = table.Remove(r2.Node, 0, 0, 0)
+	r4, err := table.removeNode(second_id)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	r4, err := table.Get(r2.Node, 0, 0, 0)
-	if err != nil {
-		t.Fatalf(err.Error())
+	if r4 == nil {
+		t.Fatal("No node removed.")
 	}
-	if r4 != nil {
-		t.Errorf("Expected nil response, got Node %s instead.", r3.Node.ID)
+	r5, err := table.getNode(second_id)
+	if err != nodeNotFoundError {
+		if err != nil {
+			t.Fatalf(err.Error())
+		} else {
+			t.Fatal("Expected nodeNotFoundError, got nil error instead.")
+		}
 	}
-	r5, err := table.Get(r.Node, 0, 0, 0)
-	if err != nil {
-		t.Fatal(err.Error())
+	if r5 != nil {
+		t.Errorf("Expected nil response, got Node %s instead.", r5.ID)
 	}
-	if r5 == nil {
-		t.Fatalf("Got nil response when querying for first insert.")
-	}
-	if r5.Entry != 0 {
-		t.Errorf("Expected first insert to be in position 0, got %v instead.", r5.Entry)
-	}
-	r6, err := table.Get(r3.Node, 0, 0, 0)
+	r6, err := table.getNode(other_id)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 	if r6 == nil {
-		t.Fatalf("Got nil response when querying for third insert.")
+		t.Fatalf("Got nil response when querying for first insert.")
 	}
-	if r6.Entry != 1 {
-		t.Errorf("Expected third insert to be in position 1, got %v instead.", r6.Entry)
+	r7, err := table.getNode(third_id)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+	if r7 == nil {
+		t.Fatalf("Got nil response when querying for third insert.")
 	}
 }
 
+/*
 // Test scanning the routing table when the key falls in between two nodes
 func TestRoutingTableScanSplit(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("1234560890abcdef"))
@@ -711,7 +688,7 @@ func TestRoutingTableRouteNone(t *testing.T) {
 //////////////////////////////////////////////////////////////////////////
 ////////////////////////// Benchmarks ////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
-
+*/
 // How fast can we insert nodes
 func BenchmarkRoutingTableInsert(b *testing.B) {
 	b.StopTimer()
@@ -721,24 +698,21 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 	}
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
+	defer table.stop()
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
 		seed := strconv.FormatInt(time.Now().UnixNano()*int64(b.N), 10)
-		b.StartTimer()
 		other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
-		other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-		_, err = table.Insert(other)
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
+		other := *NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+		b.StartTimer()
+		_, err = table.insertNode(other)
 	}
 }
 
@@ -751,55 +725,27 @@ func BenchmarkRoutingTableGetByID(b *testing.B) {
 	}
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
+	defer table.stop()
 
 	seed := strconv.FormatInt(time.Now().UnixNano(), 10)
 	other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	_, err = table.Insert(other)
+	other := *NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	_, err = table.insertNode(other)
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		table.Get(other, 0, 0, 0)
+		table.getNode(other.ID)
 	}
 }
 
-// How fast can we retrieve nodes by position
-func BenchmarkRoutingTableGetByPos(b *testing.B) {
-	b.StopTimer()
-	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
-	if err != nil {
-		b.Fatalf(err.Error())
-	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
-	table := NewRoutingTable(self)
-	go table.listen()
-	defer table.Stop()
-
-	seed := strconv.FormatInt(time.Now().UnixNano(), 10)
-	other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
-	if err != nil {
-		b.Fatalf(err.Error())
-	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	r, err := table.Insert(other)
-	if err != nil {
-		b.Fatalf(err.Error())
-	}
-	b.StartTimer()
-	for i := 0; i < b.N; i++ {
-		table.Get(nil, r.Row, r.Col, r.Entry)
-	}
-}
-
+/*
 // How fast can we retrieve nodes by proximity
 func BenchmarkRoutingTableGetByProximity(b *testing.B) {
 	b.StopTimer()
@@ -838,7 +784,7 @@ func BenchmarkRoutingTableGetByProximity(b *testing.B) {
 		table.GetByProximity(r.Row, r.Col, 0)
 	}
 }
-
+*/
 // How fast can we dump the nodes in the table
 func BenchmarkRoutingTableDump(b *testing.B) {
 	b.StopTimer()
@@ -847,9 +793,9 @@ func BenchmarkRoutingTableDump(b *testing.B) {
 		b.Fatalf(err.Error())
 	}
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
+	defer table.stop()
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100000; i = i + 1 {
@@ -865,7 +811,7 @@ func BenchmarkRoutingTableDump(b *testing.B) {
 				b.Fatalf(err.Error())
 			}
 			node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-			_, err = table.Insert(node)
+			_, err = table.insertNode(*node)
 			if err != nil {
 				b.Fatalf(err.Error())
 			}
@@ -875,12 +821,14 @@ func BenchmarkRoutingTableDump(b *testing.B) {
 	wg.Wait()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		nodes, err := table.Dump()
+		nodes, err := table.export()
+		b.StopTimer()
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
 		if len(nodes) < 100000 {
 			b.Fatalf("Supposed to have %d nodes, have %d instead.", 100000, len(nodes))
 		}
+		b.StartTimer()
 	}
-}*/
+}

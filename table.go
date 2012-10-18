@@ -118,8 +118,8 @@ func (t *routingTable) insert(node *Node, poschan chan routingTablePosition, err
 	if t.nodes[row][col] == nil {
 		t.nodes[row][col] = []*Node{}
 	}
-	for i, node := range t.nodes[row][col] {
-		if node.ID.Equals(node.ID) {
+	for i, n := range t.nodes[row][col] {
+		if node.ID.Equals(n.ID) {
 			t.nodes[row][col][i] = node
 			poschan <- routingTablePosition{
 				row:      row,
