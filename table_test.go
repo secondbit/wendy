@@ -684,11 +684,12 @@ func TestRoutingTableRouteNone(t *testing.T) {
 		t.Fatalf("Expected nil result, got %s instead.", r3.ID)
 	}
 }
+*/
 
 //////////////////////////////////////////////////////////////////////////
 ////////////////////////// Benchmarks ////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
-*/
+
 // How fast can we insert nodes
 func BenchmarkRoutingTableInsert(b *testing.B) {
 	b.StopTimer()
@@ -745,9 +746,8 @@ func BenchmarkRoutingTableGetByID(b *testing.B) {
 	}
 }
 
-/*
-// How fast can we retrieve nodes by proximity
-func BenchmarkRoutingTableGetByProximity(b *testing.B) {
+// How fast can we route messages
+func BenchmarkRoutingTableRoute(b *testing.B) {
 	b.StopTimer()
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
@@ -755,36 +755,54 @@ func BenchmarkRoutingTableGetByProximity(b *testing.B) {
 	}
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
-	table := NewRoutingTable(self)
+	table := newRoutingTable(self)
 	go table.listen()
-	defer table.Stop()
+	defer table.stop()
 
-	reqs := []*routingTableRequest{}
-
-	for i := 0; i < b.N; i++ {
-		seed := strconv.FormatInt(time.Now().UnixNano()*int64(i+1), 10)
-		other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
-		other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-		r, err := table.Insert(other)
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
-		reqs = append(reqs, r)
+	var wg sync.WaitGroup
+	for i := 0; i < 100000; i = i + 1 {
+		wg.Add(1)
+		go func() {
+			idBytes := make([]byte, 16)
+			_, err := io.ReadFull(rand.Reader, idBytes)
+			if err != nil {
+				b.Fatalf(err.Error())
+			}
+			id, err := NodeIDFromBytes(idBytes)
+			if err != nil {
+				b.Fatalf(err.Error())
+			}
+			node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+			_, err = table.insertNode(*node)
+			if err != nil {
+				b.Fatalf(err.Error())
+			}
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		req := 0
-		if len(reqs) > 1 {
-			req = i % (len(reqs) - 1)
+		b.StopTimer()
+		idBytes := make([]byte, 16)
+		_, err := io.ReadFull(rand.Reader, idBytes)
+		if err != nil {
+			b.Fatalf(err.Error())
 		}
-		r := reqs[req]
-		table.GetByProximity(r.Row, r.Col, 0)
+		id, err := NodeIDFromBytes(idBytes)
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		b.StartTimer()
+		_, err = table.route(id)
+		b.StopTimer()
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		b.StartTimer()
 	}
 }
-*/
+
 // How fast can we dump the nodes in the table
 func BenchmarkRoutingTableDump(b *testing.B) {
 	b.StopTimer()
