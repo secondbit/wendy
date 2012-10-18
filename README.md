@@ -2,6 +2,11 @@
 
 An open source, pure-[Go](http://www.golang.org "Pretty much the best programming language ever") implementation of the [Pastry Distributed Hash Table](http://en.wikipedia.org/wiki/Pastry_(DHT\) "Pastry on Wikipedia").
 
+## Status
+[![Build Status](https://secure.travis-ci.org/secondbit/pastry.png)](http://travis-ci.org/secondbit/pastry)
+
+**Alpha**: Pastry is still in active development. It should not be used for mission-critical software. While it *appears* to function as it should, we're still testing it to make sure there aren't any issues.
+
 ## Requirements
 
 This implementation of Pastry is written to be compatible with Go 1. It uses nothing outside of the Go standard library. Nodes in the network must be able to communicate using TCP over a configurable port. Nodes also must be able to have long-running processes.
@@ -67,9 +72,46 @@ defer cluster.Stop()
 
 ### Registering Handlers For Your Application
 
-Pastry offers several callbacks at various points in the process of exchanging messages within your Cluster. You can use these callbacks to register listeners within your application.
+Pastry offers several callbacks at various points in the process of exchanging messages within your Cluster. You can use these callbacks to register listeners within your application. These callbacks are simply instances of a type that fulfills the [pastry.Application](http://go.pkgdoc.org/secondbit.org/pastry#Application) interface and are subsequently registered to a cluster.
 
-**This part has not been implemented yet. It will be documented following implementation.**
+```go
+type PastryApplication struct {
+}
+
+func (app *PastryApplication) OnError(err error) {
+	panic(err.Error())
+}
+
+func (app *PastryApplication) OnDeliver(msg pastry.Message) {
+	fmt.Println("Received message: ", msg)
+}
+
+func (app *PastryApplication) OnForward(msg *pastry.Message, next pastry.NodeID) bool {
+	fmt.Printf("Forwarding message %s to Node %s.", msg.ID, next)
+	return true // return false if you don't want the message forwarded
+}
+
+func (app *PastryApplication) OnNewLeaves(leaves []*pastry.Node) {
+	fmt.Println("Leaf set changed: ", leaves)
+}
+
+func (app *PastryApplication) OnNodeJoin(node *pastry.Node) {
+	fmt.Println("Node joined: ", node.ID)
+}
+
+func (app *PastryApplcation) OnNodeExit(node *pastry.Node) {
+	fmt.Println("Node left: ", node.ID)
+}
+
+func (app *PastryApplication) OnHeartbeat(node *pastry.Node) {
+	fmt.Println("Received heartbeat from ", node.ID)
+}
+
+app := &PastryApplication{}
+cluster.RegisterCallback(app)
+```
+
+The methods will be invoked at the appropriate points in the lifecycle of the cluster. You should consult [the documentation](http://go.pkgdoc.org/secondbit.org/pastry#Application) for more information.
 
 ## Contributing
 
@@ -96,6 +138,7 @@ We approached this pragmatically, so there are some differences between the Past
 
 * If you should happen to have two Nodes in a Cluster who don't agree as to what time it is, it's possible to get them stuck in an infinite loop that saturates the network with messages. For the love of God, use NTP to make your Nodes agree what time it is. (*Note*: This is to prevent race conditions when two Nodes join simultaneously.)
 * In the event that: 1) a Node is added, 2) the Node receives a message *before* it has finished initialising its state tables, and 3) the Node, based on its partial implementation of the state tables, is the closest Node to the message ID, that Node will incorrectly assume it is the destination for the message when there *may* be a better suited Node in the network. Depending on network speeds and the size of the cluster, this period of potential-for-message-swallowing is expected to last, at most, a few seconds, and will only occur when a Node is added to the cluster. If, as per the previous bug, your Nodes don't agree on the time… well, God help you.
+* In the event that one of the two immediate neighbours (in the NodeID space) of the current Node leaves the cluster, the Node will have a hole in its leaf set until it next receives (or has a reason to request) state information from another Node. This should not affect the outcome of the routing process, but may lead to sub-optimal routing times.
 
 ## Authors
 
