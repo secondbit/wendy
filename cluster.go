@@ -85,6 +85,7 @@ func NewCluster(self *Node, credentials Credentials) *Cluster {
 		logLevel:           LogLevelWarn,
 		heartbeatFrequency: 300,
 		networkTimeout:     10,
+		credentials:        credentials,
 	}
 }
 
@@ -327,6 +328,7 @@ func (c *Cluster) send(msg Message, destination *Node) error {
 }
 
 func (c *Cluster) sendToIP(msg Message, address string) error {
+	c.debug("Sending message %s", string(msg.Value))
 	conn, err := net.DialTimeout("tcp", address, time.Duration(c.networkTimeout)*time.Second)
 	if err != nil {
 		c.debug(err.Error())
@@ -357,12 +359,16 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 // Our message handlers!
 
 func (c *Cluster) onNodeJoin(msg Message) {
-	var creds Credentials
-	err := json.Unmarshal(msg.Value, &creds)
-	if err != nil {
-		c.fanOutError(err)
+	valid := c.credentials == nil
+	if !valid {
+		var err error
+		valid, err = c.credentials.Valid(msg.Value)
+		if err != nil {
+			c.fanOutError(err)
+			return
+		}
 	}
-	if c.credentials.Valid(creds) {
+	if valid {
 		c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
 		err := c.Send(msg)
 		if err != nil {
@@ -377,6 +383,8 @@ func (c *Cluster) onNodeJoin(msg Message) {
 				c.fanOutError(err)
 			}
 		}
+	} else {
+		c.warn("Credentials did not match.")
 	}
 }
 
