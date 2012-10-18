@@ -59,8 +59,8 @@ NewCluster just creates a Cluster object, initialises the state tables and chann
 
 Credentials are an interface that Pastry defines to help control access to your clusters. Credentials could be whatever you want them to be: public/private keys, a single word or phrase, a rather large number... anything at all is fair game. The only rules for Credentials are as follows:
 
-1. They must marshal to and from JSON. That means a `MarshalJSON()` function that returns a slice of bytes and an error, and an `UnmarshalJSON([]byte)` function that returns an error.
-2. They must have a `Valid` method that accepts another instance of Credentials and returns a boolean. When a node attempts to join the cluster, its Credentials will be marshalled to JSON, transferred with the request, unmarshalled with JSON, and passed to the Valid method on the target Node. If that Valid method returns true, the Node will be allowed to join the Cluster. Otherwise, the Node will be excluded from the Cluster.
+1. They must marshal to and from JSON. That means a `MarshalJSON()` function that returns a slice of bytes and an error, and an `UnmarshalJSON([]byte)` function that returns an error. These are not explicitly declared in the interface so that applications may just use the default Marshal/Unmarshal implementations.
+2. They must have a `Valid` method that accepts a slice of bytes. These bytes should then be unmarshaled into another instance of Credentials and return a boolean, or an error if there's an error while unmarshaling. When a node attempts to join the cluster, its Credentials will be marshalled to JSON, transferred with the request, and passed to the Valid method on the target Node. If that Valid method returns true, the Node will be allowed to join the Cluster. Otherwise, the Node will be excluded from the Cluster.
 
 ### Listening For Messages
 
