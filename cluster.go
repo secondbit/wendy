@@ -177,7 +177,9 @@ func (c *Cluster) Send(msg Message) error {
 			c.deliver(msg)
 			return nil
 		}
-		return err
+		if err != nodeNotFoundError {
+			return err
+		}
 	}
 	if target == nil {
 		c.debug("Target not found in leaf set, checking routing table.")
@@ -187,7 +189,9 @@ func (c *Cluster) Send(msg Message) error {
 				c.deliver(msg)
 				return nil
 			}
-			return err
+			if err != nodeNotFoundError {
+				return err
+			}
 		}
 	}
 	if target == nil {
