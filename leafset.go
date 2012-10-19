@@ -434,7 +434,6 @@ func (l *leafSet) remove(id NodeID, resp chan *Node, err chan error) {
 
 func (l *leafSet) debug(format string, v ...interface{}) {
 	if l.logLevel <= LogLevelDebug {
-		l.log.Printf("log level: %d", l.logLevel)
 		l.log.Printf(format, v...)
 	}
 }
