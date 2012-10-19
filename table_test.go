@@ -483,7 +483,7 @@ func TestRoutingTableScanMultipleEntries(t *testing.T) {
 	}
 	r3, err := table.route(message_id)
 	if err != nil {
-			t.Fatal(err.Error())
+		t.Fatal(err.Error())
 	}
 	if r3 == nil {
 		t.Fatalf("Scan returned nil.")
