@@ -203,14 +203,20 @@ func (l *leafSet) get(id NodeID, resp chan *Node, err chan error) {
 	side := l.self.ID.RelPos(id)
 	if side == -1 {
 		for _, node := range l.left {
-			if node == nil || id.Equals(node.ID) {
+			if node == nil {
+				break
+			}
+			if id.Equals(node.ID) {
 				resp <- node
 				return
 			}
 		}
 	} else if side == 1 {
 		for _, node := range l.right {
-			if node == nil || id.Equals(node.ID) {
+			if node == nil {
+				break
+			}
+			if id.Equals(node.ID) {
 				resp <- node
 				return
 			}
@@ -229,6 +235,7 @@ func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
 	side := l.self.ID.RelPos(key)
 	best_score := l.self.ID.Diff(key)
 	best := l.self
+	biggest := l.self.ID
 	if side == -1 {
 		for _, node := range l.left {
 			if node == nil {
@@ -239,6 +246,7 @@ func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
 				best = node
 				best_score = diff
 			}
+			biggest = node.ID
 		}
 	} else {
 		for _, node := range l.right {
@@ -250,7 +258,12 @@ func (l *leafSet) scan(key NodeID, resp chan *Node, err chan error) {
 				best = node
 				best_score = diff
 			}
+			biggest = node.ID
 		}
+	}
+	if biggest.Less(key) {
+		err <- nodeNotFoundError
+		return
 	}
 	if !best.ID.Equals(l.self.ID) {
 		resp <- best
