@@ -84,12 +84,7 @@ func (id NodeID) Equals(other NodeID) bool {
 
 // Less tests two NodeIDs to determine if the ID the method is called on is less than the ID passed as an argument. An ID is considered to be less if the first inequal digit between the two IDs is considered to be less.
 func (id NodeID) Less(other NodeID) bool {
-	for i, d := range id {
-		if !d.Equals(other[i]) {
-			return d.Less(other[i])
-		}
-	}
-	return false
+	return id.RelPos(other) < 0
 }
 
 // CommonPrefixLen returns the number of leading digits that are equal in the two NodeIDs.
@@ -138,18 +133,26 @@ func (id NodeID) RelPos(other NodeID) int {
 	middle := big.NewInt(0).Div(max, big.NewInt(2))
 	larger := big.NewInt(0)
 	smaller := big.NewInt(0)
+	obj_bigger := false
 	if id10.Cmp(other10) > 0 {
 		larger = id10
 		smaller = other10
 	} else {
+		obj_bigger = true
 		larger = other10
 		smaller = id10
 	}
 	diff := big.NewInt(0).Sub(larger, smaller)
 	if diff.Cmp(middle) <= 0 {
+		if obj_bigger {
+			return -1
+		}
 		return 1
 	}
-	return 1
+	if obj_bigger {
+		return 1
+	}
+	return -1
 }
 
 // Base10 returns the NodeID as a base 10 number, translating each base 16 digit.
