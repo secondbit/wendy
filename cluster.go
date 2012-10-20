@@ -273,6 +273,14 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		c.fanOutError(err)
 		return
 	}
+	valid := c.credentials == nil
+	if !valid {
+		valid = c.credentials.Valid(msg.Credentials)
+	}
+	if !valid {
+		c.warn("Credentials did not match. Supplied credentials: %s", msg.Credentials)
+		return
+	}
 	if msg.Purpose != NODE_JOIN {
 		node, err := c.table.getNode(msg.Sender.ID)
 		if err == nodeNotFoundError {
@@ -364,27 +372,19 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 // Our message handlers!
 
 func (c *Cluster) onNodeJoin(msg Message) {
-	valid := c.credentials == nil
-	if !valid {
-		valid = c.credentials.Valid(msg.Credentials)
+	c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
+	err := c.Send(msg)
+	if err != nil {
+		c.fanOutError(err)
 	}
-	if valid {
-		c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
-		err := c.Send(msg)
-		if err != nil {
+	c.insert(msg.Sender)
+	err = c.sendStateTables(msg.Sender, true, true)
+	if err != nil {
+		if err == deadNodeError {
+			c.remove(msg.Sender.ID)
+		} else {
 			c.fanOutError(err)
 		}
-		c.insert(msg.Sender)
-		err = c.sendStateTables(msg.Sender, true, true)
-		if err != nil {
-			if err == deadNodeError {
-				c.remove(msg.Sender.ID)
-			} else {
-				c.fanOutError(err)
-			}
-		}
-	} else {
-		c.warn("Credentials did not match.")
 	}
 }
 
