@@ -355,8 +355,7 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 		return err
 	}
 	c.debug("Sent message %s to %s", msg.Key, address)
-	var result []byte
-	_, err = conn.Read(result)
+	_, err = conn.Read(nil)
 	if err != nil {
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 			return deadNodeError
