@@ -49,9 +49,8 @@ func (l *leafSet) listen() {
 			if !ok {
 				panic("Listen channel closed?")
 			}
-			switch request.(type) {
+			switch r := request.(type) {
 			case getRequest:
-				r := request.(getRequest)
 				if r.strict {
 					l.get(r.id, r.response, r.err)
 				} else {
@@ -59,16 +58,13 @@ func (l *leafSet) listen() {
 				}
 				break
 			case dumpRequest:
-				r := request.(dumpRequest)
 				l.dump(r.response)
 				break
 			case insertRequest:
 				l.debug("Insert request routed.")
-				r := request.(insertRequest)
 				l.insert(r.node, r.leafPos, r.err)
 				break
 			case removeRequest:
-				r := request.(removeRequest)
 				l.remove(r.id, r.response, r.err)
 				break
 			}
