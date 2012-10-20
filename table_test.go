@@ -530,7 +530,7 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 	if r2 == nil {
 		t.Fatal("Second insert returned nil.")
 	}
-	message_id, err := NodeIDFromBytes([]byte("1234567890aaaaaaa"))
+	message_id, err := NodeIDFromBytes([]byte("1234567890accdef"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
