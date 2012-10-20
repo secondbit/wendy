@@ -1,9 +1,178 @@
 package pastry
 
 import (
+	"bytes"
 	"math/big"
 	"testing"
 )
+
+func TestNodeIDString(t *testing.T) {
+	tests := [...]struct {
+		bytes []byte
+		str   string
+	}{
+		{
+			make([]byte, 16),
+			"00000000000000000000000000000000",
+		},
+		{
+			bytes.Repeat([]byte{0xff}, 16),
+			"ffffffffffffffffffffffffffffffff",
+		},
+	}
+	for i, test := range tests {
+		id, err := NodeIDFromBytes(test.bytes)
+		if err != nil {
+			t.Errorf("test %v: unexpected error %v", i, err)
+		}
+		str := id.String()
+		if str != test.str {
+			t.Errorf("test %v: expected %q, got %q", i, test.str, str)
+		}
+	}
+}
+
+func TestNodeIDRelPos(t *testing.T) {
+	tests := [...]struct {
+		bytes1, bytes2 []byte
+		relpos         int
+	}{
+		{
+			make([]byte, 16),
+			make([]byte, 16),
+			0,
+		},
+		{
+			make([]byte, 16),
+			bytes.Repeat([]byte{0x11}, 16),
+			-1,
+		},
+		{
+			bytes.Repeat([]byte{0x11}, 16),
+			make([]byte, 16),
+			1,
+		},
+		{
+			make([]byte, 16),
+			bytes.Repeat([]byte{0xff}, 16),
+			1,
+		},
+		{
+			bytes.Repeat([]byte{0xff}, 16),
+			make([]byte, 16),
+			-1,
+		},
+	}
+	for i, test := range tests {
+		id1, err := NodeIDFromBytes(test.bytes1)
+		if err != nil {
+			t.Errorf("test %v: unexpected error %v", i, err)
+		}
+		id2, err := NodeIDFromBytes(test.bytes2)
+		if err != nil {
+			t.Errorf("test %v: unexpected error %v", i, err)
+		}
+		relpos := id1.RelPos(id2)
+		if relpos != test.relpos {
+			t.Errorf("test %v: expected %v, got %v", i, test.relpos, relpos)
+		}
+	}
+}
+
+func TestNodeIDBase10(t *testing.T) {
+	tests := [...]struct {
+		bytes  []byte
+		base10 *big.Int
+	}{
+		{
+			make([]byte, 16),
+			big.NewInt(0),
+		},
+		{
+			append(make([]byte, 15), 1),
+			big.NewInt(1),
+		},
+		{
+			bytes.Repeat([]byte{0xff}, 16),
+			new(big.Int).SetBytes(bytes.Repeat([]byte{0xff}, 16)),
+		},
+	}
+	for i, test := range tests {
+		id, err := NodeIDFromBytes(test.bytes)
+		if err != nil {
+			t.Errorf("test %v: unexpected error %v", i, err)
+		}
+		base10 := id.Base10()
+		if base10.Cmp(test.base10) != 0 {
+			t.Errorf("test %v: expected %v, got %v", i, test.base10, base10)
+		}
+	}
+}
+
+func TestNodeIDLess(t *testing.T) {
+	tests := []struct {
+		bytes1, bytes2 []byte
+		less           bool
+	}{
+		{
+			make([]byte, 16),
+			make([]byte, 16),
+			false,
+		},
+		{
+			make([]byte, 16),
+			bytes.Repeat([]byte{0x11}, 16),
+			true,
+		},
+		{
+			bytes.Repeat([]byte{0x11}, 16),
+			make([]byte, 16),
+			false,
+		},
+		{
+			make([]byte, 16),
+			bytes.Repeat([]byte{0xff}, 16),
+			false,
+		},
+		{
+			bytes.Repeat([]byte{0xff}, 16),
+			make([]byte, 16),
+			true,
+		},
+	}
+	for i, test := range tests {
+		id1, err := NodeIDFromBytes(test.bytes1)
+		if err != nil {
+			t.Errorf("test %v: unexpected error %v", i, err)
+		}
+		id2, err := NodeIDFromBytes(test.bytes2)
+		if err != nil {
+			t.Errorf("test %v: unexpected error %v", i, err)
+		}
+		less := id1.Less(id2)
+		if less != test.less {
+			t.Errorf("test %v: expected %v, got %v", i, test.less, less)
+		}
+	}
+}
+
+// Make sure that iterating over digits works correctly.
+func TestNodeIDIterDigit(t *testing.T) {
+	id, err := NodeIDFromBytes([]byte{0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0xfe, 0xdc, 0xba, 0x98, 0x76, 0x54, 0x32, 0x10})
+	if err != nil {
+		t.Fatal("unexpected error", err)
+	}
+	for i := 0; i < 16; i++ {
+		if digit := id[i].Canonical(); digit != NodeIDDigit(i) {
+			t.Errorf("expected digit %#x, got %#x", i, digit)
+		}
+	}
+	for i := 0; i < 16; i++ {
+		if digit := id[i+16].Canonical(); digit != NodeIDDigit(15-i) {
+			t.Errorf("expected digit %#x, got %#x", 15-i, digit)
+		}
+	}
+}
 
 // Make sure the NodeIDDigits returned by NodeIDDigitsFromByte actually add up to equal the original byte.
 func TestNodeIDDigitsFromByteEqualsByte(t *testing.T) {
