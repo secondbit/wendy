@@ -106,11 +106,11 @@ func TestNodeIDDiff(t *testing.T) {
 
 // Make sure NodeID comparisons wrap around the circle
 func TestNodeIDDiffWrap(t *testing.T) {
-	n1, err := NodeIDFromBytes([]byte{uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)})
+	n1, err := NodeIDFromBytes(make([]byte, 16))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	n2, err := NodeIDFromBytes([]byte{uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255)})
+	n2, err := NodeIDFromBytes([]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255})
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -131,11 +131,11 @@ func TestNodeIDDiffWrap(t *testing.T) {
 // Quick benchmark to test how expensive diffing nodes is
 func BenchmarkNodeIDDiff(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		n1, err := NodeIDFromBytes([]byte{uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0), uint8(0)})
+		n1, err := NodeIDFromBytes(make([]byte, 16))
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
-		n2, err := NodeIDFromBytes([]byte{uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255), uint8(255)})
+		n2, err := NodeIDFromBytes([]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255})
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
