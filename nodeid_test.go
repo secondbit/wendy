@@ -130,15 +130,18 @@ func TestNodeIDDiffWrap(t *testing.T) {
 
 // Quick benchmark to test how expensive diffing nodes is
 func BenchmarkNodeIDDiff(b *testing.B) {
+	b.StopTimer()
+	n1, err := NodeIDFromBytes(make([]byte, 16))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	n2, err := NodeIDFromBytes([]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255})
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	b.StartTimer()
+
 	for i := 0; i < b.N; i++ {
-		n1, err := NodeIDFromBytes(make([]byte, 16))
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
-		n2, err := NodeIDFromBytes([]byte{255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255})
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
 		n1.Diff(n2)
 	}
 }
