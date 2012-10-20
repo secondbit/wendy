@@ -253,8 +253,8 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 				if entry.ID == nil {
 					continue
 				}
-				entry_diff := t.self.ID.Diff(entry.ID).Cmp(diff)
-				if entry_diff == -1 || (entry_diff == 00 && !t.self.ID.Less(entry.ID)) {
+				entry_diff := entry.ID.Diff(id).Cmp(diff)
+				if entry_diff == -1 || (entry_diff == 0 && !t.self.ID.Less(entry.ID)) {
 					if proximity == -1 || proximity > t.self.Proximity(entry) {
 						node = entry
 						proximity = t.self.Proximity(entry)
