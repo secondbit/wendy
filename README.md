@@ -142,7 +142,7 @@ To contribute to Pastry:
 * **Modify** your fork
 * **Send** a pull request
 	* Bonus points if the pull request includes *what* you changed, *why* you changed it, and *has unit tests* attached.
-        * For the love of all that is holy, please use `go fmt` *before* you send the pull request.
+	* For the love of all that is holy, please use `go fmt` *before* you send the pull request.
 
 We'll review it and merge it in if it's appropriate.
 
