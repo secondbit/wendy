@@ -7,17 +7,21 @@ import (
 
 type reqMode int
 
-const mode_set = reqMode(0)
-const mode_get = reqMode(1)
-const mode_del = reqMode(2)
-const mode_prx = reqMode(3)
-const mode_scan = reqMode(4)
-const mode_dump = reqMode(5)
-const mode_beat = reqMode(6) // For getting the nodes that need a heartbeat
+const (
+	mode_set = reqMode(iota)
+	mode_get
+	mode_del
+	mode_prx
+	mode_scan
+	mode_dump
+	mode_beat // For getting the nodes that need a heartbeat
+)
 
-const LogLevelDebug = 0
-const LogLevelWarn = 1
-const LogLevelError = 2
+const (
+	LogLevelDebug = iota
+	LogLevelWarn
+	LogLevelError
+)
 
 // Application is an interface that other packages can fulfill to hook into Pastry.
 //
