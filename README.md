@@ -106,7 +106,7 @@ func (app *PastryApplication) OnNodeJoin(node *pastry.Node) {
 	fmt.Println("Node joined: ", node.ID)
 }
 
-func (app *PastryApplcation) OnNodeExit(node *pastry.Node) {
+func (app *PastryApplication) OnNodeExit(node *pastry.Node) {
 	fmt.Println("Node left: ", node.ID)
 }
 
