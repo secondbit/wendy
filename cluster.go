@@ -291,7 +291,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 			node.setProximity(time.Since(msg.Sent).Nanoseconds())
 		}
 	}
-	conn.Write([]byte("{\"status\": \"Received.\"}"))
+	conn.Write([]byte(`{"status": "Received."}`))
 	c.debug("Got message with purpose %v", msg.Purpose)
 	switch msg.Purpose {
 	case NODE_JOIN:
