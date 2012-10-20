@@ -132,6 +132,36 @@ The first parameter is simply the IP address of a known Node in the Cluster, as 
 
 When `Join()` is called, the Node will contact the specified Node and announce its presence. The specified Node will send the joining Node its state tables and route the join message to the other Nodes in the Cluster, who will also send the joining Node their state tables. These state tables will initialise the joining Node's state tables, allowing it to participate in the Cluster.
 
+### Sending Messages
+
+Sending a message in Pastry is a little weird. Each message has an ID associated with it, which you can generate based on the contents of the message or some other key. Pastry doesn't care what the relationship between the message and the ID is (Pastry is perfectly happy with random message IDs, in fact), but applications built on Pastry sometimes dictate the terms of the message ID. All Pastry requires is that your message ID, like your Node IDs, has at least 16 bytes worth of data in it.
+
+Messages in Pastry aren't sent *to* something, they're sent *towards* something--their message ID. When a Node receives a Message, it checks to see if it knows about any Node with a NodeID closer to the MessageID than its own NodeID. If it does, it forwards the Message on to that Node. If it doesn't it considers the Message to be delivered. There are all sorts of algorithms in place to help the Message reach that delivery quicker, but they're not really the important bit. The important bit is that messages aren't sent *to* Nodes, they're sent *towards* their MessageID.
+
+Here's an example of routing a Message with a randomly generated ID (based on the `crypto/rand` package) through a Cluster:
+
+```go
+b := make([]byte, 16)
+_, err := rand.Read(b)
+if err != nil {
+	panic(err.Error())
+}
+id, err := pastry.NodeIDFromBytes(b)
+if err != nil {
+	panic(err.Error())
+}
+purpose := byte(16)
+msg := cluster.NewMessage(purpose, id, []byte("This is the body of the message."))
+err = c.Send(msg)
+if err != nil {
+	panic(err.Error())
+}
+```
+
+You'll notice we set `purpose` in there to `byte(16)`. Purpose is a way of distinguishing between different types of Messages, and is useful when handling them. We only guarantee that bytes with values 16 and above will go unused by Pastry's own messages. To avoid collisions, you should only use bytes with values of 16 and above when defining your messages.
+
+We repeated that because it's kind of important.
+
 ## Contributing
 
 We'd love to see Pastry improve. There's a lot that can still be done with it, and we'd love some help figuring out how to automate some more complete tests for it.
