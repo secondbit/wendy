@@ -291,7 +291,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 			node.setProximity(time.Since(msg.Sent).Nanoseconds())
 		}
 	}
-	conn.Write([]byte("{\"status\": \"Received.\"}"))
+	conn.Write([]byte(`{"status": "Received."}`))
 	c.debug("Got message with purpose %v", msg.Purpose)
 	switch msg.Purpose {
 	case NODE_JOIN:
@@ -348,16 +348,14 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 		return deadNodeError
 	}
 	defer conn.Close()
-	conn.SetWriteDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
-	conn.SetReadDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
+	conn.SetDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
 	encoder := json.NewEncoder(conn)
 	err = encoder.Encode(msg)
 	if err != nil {
 		return err
 	}
 	c.debug("Sent message %s to %s", msg.Key, address)
-	var result []byte
-	_, err = conn.Read(result)
+	_, err = conn.Read(nil)
 	if err != nil {
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
 			return deadNodeError

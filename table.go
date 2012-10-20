@@ -43,9 +43,8 @@ func (t *routingTable) listen() {
 	for {
 		select {
 		case request := <-t.request:
-			switch request.(type) {
+			switch r := request.(type) {
 			case getRequest:
-				r := request.(getRequest)
 				if r.strict {
 					t.get(r.id, r.response, r.err)
 				} else {
@@ -53,15 +52,12 @@ func (t *routingTable) listen() {
 				}
 				break
 			case dumpRequest:
-				r := request.(dumpRequest)
 				t.dump(r.response)
 				break
 			case insertRequest:
-				r := request.(insertRequest)
 				t.insert(r.node, r.tablePos, r.err)
 				break
 			case removeRequest:
-				r := request.(removeRequest)
 				t.remove(r.id, r.response, r.err)
 				break
 			}
