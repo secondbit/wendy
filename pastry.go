@@ -44,9 +44,21 @@ type Application interface {
 	OnHeartbeat(node Node)
 }
 
-// Credentials is an interface that can be fulfilled to limit access to the Cluster. It only requires that the values are capable of being marshalled to and from JSON and that they have a Valid method that accepts a slice of bytes, unmarshals it as another set of Credentials and returns true if they are valid (e.g., match), and false if they are invalid.
+// Credentials is an interface that can be fulfilled to limit access to the Cluster.
 type Credentials interface {
-	Valid([]byte) (bool, error)
+	Valid([]byte) bool
+	Marshal() ([]byte, error)
+}
+
+// Passphrase is an implementation of Credentials that grants access to the Cluster if the Node has the same Passphrase set
+type Passphrase string
+
+func (p Passphrase) Valid(supplied []byte) bool {
+	return string(supplied) == string(p)
+}
+
+func (p Passphrase) Marshal() ([]byte, error) {
+	return []byte(p), nil
 }
 
 // The below types are used in ensuring concurrency safety within the state tables
