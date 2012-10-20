@@ -348,8 +348,7 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 		return deadNodeError
 	}
 	defer conn.Close()
-	conn.SetWriteDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
-	conn.SetReadDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
+	conn.SetDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
 	encoder := json.NewEncoder(conn)
 	err = encoder.Encode(msg)
 	if err != nil {
