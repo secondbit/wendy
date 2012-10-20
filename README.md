@@ -134,7 +134,7 @@ When `Join()` is called, the Node will contact the specified Node and announce i
 
 ## Contributing
 
-We'd love contributions to Pastry. We use it as a mission-critical component in our own applications (**Note:** as Pastry is incomplete, so are our applications) and have a vested interest in seeing it improve.
+We'd love to see Pastry improve. There's a lot that can still be done with it, and we'd love some help figuring out how to automate some more complete tests for it.
 
 To contribute to Pastry:
 
@@ -142,6 +142,7 @@ To contribute to Pastry:
 * **Modify** your fork
 * **Send** a pull request
 	* Bonus points if the pull request includes *what* you changed, *why* you changed it, and *has unit tests* attached.
+        * For the love of all that is holy, please use `go fmt` *before* you send the pull request.
 
 We'll review it and merge it in if it's appropriate.
 
