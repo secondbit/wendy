@@ -194,7 +194,8 @@ We approached this pragmatically, so there are some differences between the Past
 
 The following people contributed code that found its way into Pastry:
 
-* Paddy Foran ([paddy@secondbit.org](mailto:paddy@secondbit.org))
+* Paddy Foran ([paddyforan](https://github.com/paddyforan))
+* Jesse McNelis ([jessta](https://github.com/jessta))
 
 ## Contributors
 
