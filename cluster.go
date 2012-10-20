@@ -224,10 +224,7 @@ func (c *Cluster) Send(msg Message) error {
 //
 // The IP and port passed to Join should be those of a known Node in the Cluster. The algorithm assumes that the known Node is close in proximity to the current Node, but that is not a hard requirement.
 func (c *Cluster) Join(ip string, port int) error {
-	credentials, err := c.credentials.Marshal()
-	if err != nil {
-		return err
-	}
+	credentials := c.credentials.Marshal()
 	c.debug("Sending join message to %s:%d", ip, port)
 	msg := c.NewMessage(NODE_JOIN, c.self.ID, credentials)
 	address := ip + ":" + strconv.Itoa(port)
@@ -369,7 +366,7 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 func (c *Cluster) onNodeJoin(msg Message) {
 	valid := c.credentials == nil
 	if !valid {
-		valid = c.credentials.Valid(msg.Value)
+		valid = c.credentials.Valid(msg.Credentials)
 	}
 	if valid {
 		c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)

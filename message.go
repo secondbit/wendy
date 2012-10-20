@@ -6,11 +6,12 @@ import (
 
 // Message represents the messages that are sent through the cluster of Nodes
 type Message struct {
-	Purpose byte
-	Sender  Node      // The Node a message originated at
-	Key     NodeID    // The message's ID
-	Value   []byte    // The message being passed
-	Sent    time.Time // The time the message was initially sent
+	Purpose     byte
+	Sender      Node      // The Node a message originated at
+	Key         NodeID    // The message's ID
+	Value       []byte    // The message being passed
+	Credentials []byte    // The Credentials used to authenticate the Message
+	Sent        time.Time // The time the message was initially sent
 }
 
 const NODE_JOIN = byte(0) // Used when a Node joins the cluster
@@ -27,11 +28,16 @@ func (m *Message) String() string {
 }
 
 func (c *Cluster) NewMessage(purpose byte, key NodeID, value []byte) Message {
+	var credentials []byte
+	if c.credentials != nil {
+		credentials = c.credentials.Marshal()
+	}
 	return Message{
-		Purpose: purpose,
-		Sender:  *c.self,
-		Key:     key,
-		Value:   value,
-		Sent:    time.Now(),
+		Purpose:     purpose,
+		Sender:      *c.self,
+		Key:         key,
+		Value:       value,
+		Sent:        time.Now(),
+		Credentials: credentials,
 	}
 }

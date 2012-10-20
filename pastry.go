@@ -47,7 +47,7 @@ type Application interface {
 // Credentials is an interface that can be fulfilled to limit access to the Cluster.
 type Credentials interface {
 	Valid([]byte) bool
-	Marshal() ([]byte, error)
+	Marshal() []byte
 }
 
 // Passphrase is an implementation of Credentials that grants access to the Cluster if the Node has the same Passphrase set
@@ -57,8 +57,8 @@ func (p Passphrase) Valid(supplied []byte) bool {
 	return string(supplied) == string(p)
 }
 
-func (p Passphrase) Marshal() ([]byte, error) {
-	return []byte(p), nil
+func (p Passphrase) Marshal() []byte {
+	return []byte(p)
 }
 
 // The below types are used in ensuring concurrency safety within the state tables
