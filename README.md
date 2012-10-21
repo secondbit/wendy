@@ -196,6 +196,7 @@ The following people contributed code that found its way into Pastry:
 
 * Paddy Foran ([paddyforan](https://github.com/paddyforan))
 * Jesse McNelis ([jessta](https://github.com/jessta))
+* Evan Shaw ([edsrzf](https://github.com/edsrzf))
 
 ## Contributors
 
