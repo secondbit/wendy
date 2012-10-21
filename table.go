@@ -110,7 +110,7 @@ func (t *routingTable) insert(node *Node, poschan chan routingTablePosition, err
 		errchan <- throwIdentityError("insert", "into", "routing table")
 		return
 	}
-	col := int(node.ID[row].Canonical())
+	col := int(node.ID.Digit(row))
 	if col >= len(t.nodes[row]) {
 		errchan <- impossibleError
 		return
@@ -184,11 +184,11 @@ func (t *routingTable) route(key NodeID) (*Node, error) {
 
 func (t *routingTable) get(id NodeID, resp chan *Node, err chan error) {
 	row := t.self.ID.CommonPrefixLen(id)
-	if row >= len(id) {
+	if row >= idLen {
 		err <- throwIdentityError("get", "from", "routing table")
 		return
 	}
-	col := int(id[row].Canonical())
+	col := int(id.Digit(row))
 	if col >= len(t.nodes[row]) {
 		err <- impossibleError
 		return
@@ -214,11 +214,11 @@ func (t *routingTable) get(id NodeID, resp chan *Node, err chan error) {
 func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 	var node *Node
 	row := t.self.ID.CommonPrefixLen(id)
-	if row >= len(id) {
+	if row >= idLen {
 		err <- throwIdentityError("route to", "in", "routing table")
 		return
 	}
-	col := int(id[row].Canonical())
+	col := int(id.Digit(row))
 	if col >= len(t.nodes[row]) {
 		err <- impossibleError
 		return
@@ -239,7 +239,7 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 	diff := t.self.ID.Diff(id)
 	for scan_row := row; scan_row < len(t.nodes); scan_row++ {
 		for c, n := range t.nodes[scan_row] {
-			if c == int(t.self.ID[row].Canonical()) {
+			if c == int(t.self.ID.Digit(row)) {
 				continue
 			}
 			if n == nil || len(n) < 1 {
@@ -250,7 +250,7 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 				if entry == nil {
 					continue
 				}
-				if entry.ID == nil {
+				if entry.LocalIP == "" {
 					continue
 				}
 				entry_diff := entry.ID.Diff(id).Cmp(diff)
@@ -299,11 +299,11 @@ func (t *routingTable) remove(id NodeID, resp chan *Node, err chan error) {
 	var row, col, entry int
 	entry = -1
 	row = t.self.ID.CommonPrefixLen(id)
-	if row >= len(id) {
+	if row >= idLen {
 		err <- throwIdentityError("remove", "from", "routing table")
 		return
 	}
-	col = int(id[row].Canonical())
+	col = int(id.Digit(row))
 	if col > len(t.nodes[row]) {
 		err <- impossibleError
 	}

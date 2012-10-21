@@ -163,24 +163,13 @@ func TestNodeIDIterDigit(t *testing.T) {
 		t.Fatal("unexpected error", err)
 	}
 	for i := 0; i < 16; i++ {
-		if digit := id[i].Canonical(); digit != NodeIDDigit(i) {
+		if digit := id.Digit(i); digit != byte(i) {
 			t.Errorf("expected digit %#x, got %#x", i, digit)
 		}
 	}
 	for i := 0; i < 16; i++ {
-		if digit := id[i+16].Canonical(); digit != NodeIDDigit(15-i) {
+		if digit := id.Digit(16 + i); digit != byte(15-i) {
 			t.Errorf("expected digit %#x, got %#x", 15-i, digit)
-		}
-	}
-}
-
-// Make sure the NodeIDDigits returned by NodeIDDigitsFromByte actually add up to equal the original byte.
-func TestNodeIDDigitsFromByteEqualsByte(t *testing.T) {
-	bytes := []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_ ")
-	for _, b := range bytes {
-		d1, d2 := NodeIDDigitsFromByte(b)
-		if uint8(d1)+uint8(d2) != uint8(b) {
-			t.Errorf("%v + %v should equal %v, but instead equals %v.", uint8(d1), uint8(d2), uint8(b), uint8(d1)+uint8(d2))
 		}
 	}
 }
@@ -191,15 +180,6 @@ func TestNodeIDFromBytesWithInsufficientBytes(t *testing.T) {
 	id, err := NodeIDFromBytes(bytes)
 	if err == nil {
 		t.Errorf("Source length of %v bytes, but no error thrown. Instead returned NodeID of %v", len(bytes), id)
-	}
-}
-
-// Make sure NodeIDDigits discard their insignificant bits when comparing for equality
-func TestNodeIDDigitEqualsDiscardsInsignificantBits(t *testing.T) {
-	d1 := NodeIDDigit(0xf)
-	d2 := NodeIDDigit(0xf0)
-	if !d1.Equals(d2) {
-		t.Errorf("%s should equal %s, but it doesn't.", d1, d2)
 	}
 }
 
@@ -215,12 +195,12 @@ func TestNodeIDFromBytesWithSufficientBytes(t *testing.T) {
 
 // Make sure the correct common prefix length is reported for two NodeIDs
 func TestNodeIDCommonPrefixLen(t *testing.T) {
-	n1 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
-	n2 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xd0, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
+	n1 := NodeID{0xfdfdfdfdfdfdfdfd, 0xfdfdfdfdfdfdfdfd}
+	n2 := NodeID{0xfdfdddfdfdfdfdfd, 0xfdfdfdfdfdfdfdfd}
 	diff1 := 4
 
-	n3 := NodeID([]NodeIDDigit{0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf})
-	n4 := NodeID([]NodeIDDigit{0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xa, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf})
+	n3 := NodeID{0xdfdfdfdfdfdfdfdf, 0xdfdfdfdfdfdfdfdf}
+	n4 := NodeID{0xdfdfdfafdfdfdfdf, 0xdfdfdfdfdfdfdfdf}
 	diff2 := 6
 
 	if n1.CommonPrefixLen(n2) != diff1 {
@@ -247,9 +227,9 @@ func TestNodeIDCommonPrefixLen(t *testing.T) {
 			t.Logf("First significant digit: %v vs. %v", n3[n3.CommonPrefixLen(n4)], n4[n3.CommonPrefixLen(n4)])
 		}
 	}
-	if n4.CommonPrefixLen(n4) != len(n4) {
-		t.Errorf("Common prefix length should be %v, is %v instead.", len(n4), n4)
-		if n4.CommonPrefixLen(n4) < len(n4) {
+	if n4.CommonPrefixLen(n4) != idLen {
+		t.Errorf("Common prefix length should be %v, is %v instead.", len(n4), n4.CommonPrefixLen(n4))
+		if n4.CommonPrefixLen(n4) < idLen {
 			t.Logf("First significant digit: %v vs. %v", n4[n4.CommonPrefixLen(n4)], n4[n4.CommonPrefixLen(n4)])
 		}
 	}
@@ -257,8 +237,8 @@ func TestNodeIDCommonPrefixLen(t *testing.T) {
 
 // Make sure the correct difference is reported between NodeIDs
 func TestNodeIDDiff(t *testing.T) {
-	n1 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0})
-	n2 := NodeID([]NodeIDDigit{0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xd0, 0xf, 0xb0})
+	n1 := NodeID{0xfdfdfdfdfdfdfdfd, 0xfdfdfdfdfdfdfdfd}
+	n2 := NodeID{0xfdfdfdfdfdfdfdfd, 0xfdfdfdfdfdfdfdfb}
 	diff1 := n1.Diff(n2)
 	if diff1.Cmp(big.NewInt(2)) != 0 {
 		t.Errorf("Difference should be 2, was %v instead", diff1)
