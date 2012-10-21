@@ -1,85 +1,40 @@
 package pastry
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math"
 	"math/big"
 )
 
-// NodeIDDigit represents a single base 16 digit of a NodeID, stored as a byte (only half of which is used).
-type NodeIDDigit byte
+const idLen = 32
 
-// NodeIDDigitsFromByte creates two NodeIDDigits from a single byte and returns them. The responses should add up to equal the byte that was passed in, as NodeIDDigitsFromByte simply cuts the byte in half using bit-shifting and returns the halves.
-func NodeIDDigitsFromByte(b byte) (NodeIDDigit, NodeIDDigit) {
-	// 0xf = 00001111, 0xf0 = 11110000
-	// b&0xf0 = first four bits, b&0xf = last four bits
-	return NodeIDDigit(b & 0xf0), NodeIDDigit(b & 0xf)
-}
-
-// Canonical returns the NodeIDDigit such that it can be safely compared to other NodeIDDigits by standardising which half of the byte is insignificant.
-func (d NodeIDDigit) Canonical() NodeIDDigit {
-	if d > 0xf {
-		return d >> 4
-	}
-	return d
-}
-
-// String returns the NodeIDDigit encoded as a hexadecimal string with the insignificant half of the byte stripped from the string.
-func (d NodeIDDigit) String() string {
-	asHex := hex.EncodeToString([]byte{byte(d.Canonical())})
-	return string(asHex[1])
-}
-
-// Equals tests two NodeIDDigits for equality, returning true if the digits are considered to be equal and false if they are considered to be inequal. NodeIDDigits are considered to be equal if the significant halves of the bytes that represent them are equal.
-func (d NodeIDDigit) Equals(other NodeIDDigit) bool {
-	return d.Canonical() == other.Canonical()
-}
-
-// Less tests two NodeIDDigits to determine whether the argument is less than the digit the method is being called on. A digit is considered to be less if its significant half of a byte is less than the significant half of the other digit's byte.
-func (d NodeIDDigit) Less(other NodeIDDigit) bool {
-	return d.Canonical() < other.Canonical()
-}
-
-// NodeID is a unique address for a node in the network. It is an array of 32 NodeIDDigits.
-type NodeID []NodeIDDigit
+// NodeID is a unique address for a node in the network.
+type NodeID [2]uint64
 
 // NodeIDFromBytes creates a NodeID from an array of bytes.
 // It returns the created NodeID, trimmed to the first 32 digits, or nil and an error if there are not enough bytes to yield 32 digits.
 func NodeIDFromBytes(source []byte) (NodeID, error) {
 	var result NodeID
 	if len(source) < 16 {
-		return nil, errors.New("Not enough bytes to create a NodeID.")
+		return result, errors.New("Not enough bytes to create a NodeID.")
 	}
-	for _, b := range source {
-		d1, d2 := NodeIDDigitsFromByte(b)
-		result = append(result, d1, d2)
-	}
-	result = result[:32]
+	result[0] = binary.BigEndian.Uint64(source)
+	result[1] = binary.BigEndian.Uint64(source[8:])
 	return result, nil
 }
 
-// String returns the hexadecimal string encoding of each NodeIDDigit in the NodeID, discarding the insignificant half of the byte.
+// String returns the hexadecimal string encoding of the NodeID.
 func (id NodeID) String() string {
-	result := []byte{}
-	for i, digit := range id {
-		if i%2 == 0 {
-			left := byte(digit.Canonical()) << 4
-			right := byte(id[i+1].Canonical())
-			result = append(result, left+right)
-		}
-	}
-	return hex.EncodeToString(result)
+	return fmt.Sprintf("%016x%016x", id[0], id[1])
 }
 
 // Equals tests two NodeIDs for equality and returns true if they are considered equal, false if they are considered inequal. NodeIDs are considered equal if each digit of the NodeID is equal.
 func (id NodeID) Equals(other NodeID) bool {
-	for i, d := range id {
-		if !d.Equals(other[i]) {
-			return false
-		}
-	}
-	return true
+	return id[0] == other[0] && id[1] == other[1]
 }
 
 // Less tests two NodeIDs to determine if the ID the method is called on is less than the ID passed as an argument. An ID is considered to be less if the first inequal digit between the two IDs is considered to be less.
@@ -87,39 +42,108 @@ func (id NodeID) Less(other NodeID) bool {
 	return id.RelPos(other) < 0
 }
 
+// absLess returns true if id < other, disregarding modular arithmetic.
+func (id NodeID) absLess(other NodeID) bool {
+	return id[0] < other[0] || id[0] == other[0] && id[1] < other[1]
+}
+
+// TODO(eds): this could be faster and smaller with a little assembly, but not
+// sure if we want to go there.
+
+// digitSet returns the index of the first 4-bit digit with any bits set.
+// The most significant digit is digit 0; the least significant is digit 15.
+func digitSet(x uint64) int {
+	if x&0xffffffff00000000 != 0 {
+		if x&0xffff000000000000 != 0 {
+			if x&0xff00000000000000 != 0 {
+				if x&0xf000000000000000 != 0 {
+					return 0
+				}
+				return 1
+			}
+			if x&0x00f0000000000000 != 0 {
+				return 2
+			}
+			return 3
+		}
+		if x&0x0000ff0000000000 != 0 {
+			if x&0x0000f00000000000 != 0 {
+				return 4
+			}
+			return 5
+		}
+		if x&0x000000f000000000 != 0 {
+			return 6
+		}
+		return 7
+	}
+	if x&0x00000000ffff0000 != 0 {
+		if x&0x00000000ff000000 != 0 {
+			if x&0x00000000f0000000 != 0 {
+				return 8
+			}
+			return 9
+		}
+		if x&0x00000000f0000000 != 0 {
+			return 10
+		}
+		return 11
+	}
+	if x&0x000000000000ff00 != 0 {
+		if x&0x000000000000f000 != 0 {
+			return 12
+		}
+		return 13
+	}
+	if x&0x00000000000000f0 != 0 {
+		return 14
+	}
+	return 15
+}
+
 // CommonPrefixLen returns the number of leading digits that are equal in the two NodeIDs.
 func (id NodeID) CommonPrefixLen(other NodeID) int {
-	for i, d := range id {
-		if !d.Equals(other[i]) {
-			return i
-		}
+	if xor := id[0] ^ other[0]; xor != 0 {
+		return digitSet(xor)
 	}
-	return len(id)
+	if xor := id[1] ^ other[1]; xor != 0 {
+		return digitSet(xor) | 16
+	}
+	return idLen
+}
+
+// differences returns the difference between the two NodeIDs in both directions.
+func (id NodeID) differences(other NodeID) (NodeID, NodeID) {
+	var d1, d2 NodeID
+	if id.absLess(other) {
+		d1[1] = other[1] - id[1]
+		// check for borrow
+		b := 0
+		if d1[1] > other[1] {
+			b = 1
+		}
+		d1[0] = other[0] - (id[0] + uint64(b))
+		d2[0], d2[1] = math.MaxUint64-d1[0], math.MaxUint64-d1[1]+1
+	} else {
+		d2[1] = id[1] - other[1]
+		// check for borrow
+		b := 0
+		if d2[1] > id[1] {
+			b = 1
+		}
+		d2[0] = id[0] - (other[0] + uint64(b))
+		d1[0], d1[1] = math.MaxUint64-d2[0], math.MaxUint64-d2[1]+1
+	}
+	return d2, d1
 }
 
 // Diff returns the difference between two NodeIDs as an absolute value. It performs the modular arithmetic necessary to find the shortest distance between the IDs in the (2^128)-1 item nodespace.
 func (id NodeID) Diff(other NodeID) *big.Int {
-	max := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil)
-	id10 := id.Base10()
-	other10 := other.Base10()
-	middle := big.NewInt(0).Div(max, big.NewInt(2))
-	larger := big.NewInt(0)
-	smaller := big.NewInt(0)
-	if id10.Cmp(other10) > 0 {
-		larger = id10
-		smaller = other10
-	} else {
-		larger = other10
-		smaller = id10
+	d1, d2 := id.differences(other)
+	if d1.absLess(d2) {
+		return d1.Base10()
 	}
-	diff := big.NewInt(0).Sub(larger, smaller)
-	if diff.Cmp(middle) <= 0 {
-		return diff
-	}
-	res := big.NewInt(0).Sub(max, larger)
-	res = res.Add(res, smaller)
-	res = res.Mod(res, max)
-	return res
+	return d2.Base10()
 }
 
 // RelPos uses modular arithmetic to determine whether the NodeID passed as an argument is to the left of the NodeID it is called on (-1), the same as the NodeID it is called on (0), or to the right of the NodeID it is called on (1) in the circular node space.
@@ -127,41 +151,37 @@ func (id NodeID) RelPos(other NodeID) int {
 	if id.Equals(other) {
 		return 0
 	}
-	max := big.NewInt(0).Exp(big.NewInt(2), big.NewInt(128), nil)
-	id10 := id.Base10()
-	other10 := other.Base10()
-	middle := big.NewInt(0).Div(max, big.NewInt(2))
-	larger := big.NewInt(0)
-	smaller := big.NewInt(0)
-	obj_bigger := false
-	if id10.Cmp(other10) > 0 {
-		larger = id10
-		smaller = other10
-	} else {
-		obj_bigger = true
-		larger = other10
-		smaller = id10
-	}
-	diff := big.NewInt(0).Sub(larger, smaller)
-	if diff.Cmp(middle) <= 0 {
-		if obj_bigger {
-			return -1
-		}
-		return 1
-	}
-	if obj_bigger {
+	d1, d2 := id.differences(other)
+	if d1.absLess(d2) {
 		return 1
 	}
 	return -1
 }
 
+var one = big.NewInt(1)
+
 // Base10 returns the NodeID as a base 10 number, translating each base 16 digit.
 func (id NodeID) Base10() *big.Int {
-	res := big.NewInt(0)
-	for i, d := range id {
-		res = res.Add(res, big.NewInt(0).Mul(big.NewInt(int64(d.Canonical())), big.NewInt(0).Exp(big.NewInt(16), big.NewInt(int64(len(id)-1-i)), nil)))
+	var result big.Int
+	if id[0] > math.MaxInt64 {
+		result.SetInt64(math.MaxInt64)
+		result.Add(&result, one)
+		result.Lsh(&result, 64)
+		id[0] -= math.MaxInt64 + 1
 	}
-	return res
+	var tmp big.Int
+	tmp.SetInt64(int64(id[0]))
+	tmp.Lsh(&tmp, 64)
+	result.Add(&result, &tmp)
+	if id[1] > math.MaxInt64 {
+		tmp.SetInt64(math.MaxInt64)
+		result.Add(&result, &tmp)
+		result.Add(&result, one)
+		id[1] -= math.MaxInt64 + 1
+	}
+	tmp.SetInt64(int64(id[1]))
+	result.Add(&result, &tmp)
+	return &result
 }
 
 // MarshalJSON fulfills the Marshaler interface, allowing NodeIDs to be serialised to JSON safely.
@@ -187,6 +207,20 @@ func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if err != nil {
 		return err
 	}
-	*id = append((*id)[0:0], new_id...)
+	*id = new_id
 	return nil
+}
+
+// Digit returns the ith 4-bit digit in the NodeID. If i >= 32, Digit panics.
+func (id NodeID) Digit(i int) byte {
+	if uint(i) >= 32 {
+		panic("invalid digit index")
+	}
+	n := id[0]
+	if i >= 16 {
+		n = id[1]
+		i &= 15
+	}
+	k := 4 * uint(15-i)
+	return byte((n >> k) & 0xf)
 }
