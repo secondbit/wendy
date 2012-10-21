@@ -14,13 +14,15 @@ type Message struct {
 	Sent        time.Time // The time the message was initially sent
 }
 
-const NODE_JOIN = byte(0) // Used when a Node joins the cluster
-const NODE_EXIT = byte(1) // Used when a Node leaves the cluster
-const HEARTBEAT = byte(2) // Used when a Node is being tested
-const STAT_DATA = byte(3) // Used when a Node broadcasts state info
-const STAT_REQ = byte(4)  // Used when a Node is requesting state info
-const NODE_RACE = byte(5) // Used when a Node hits a race condition
-const NODE_REPR = byte(6) // Used when a Node needs to repair its LeafSet
+const (
+	NODE_JOIN = byte(iota) // Used when a Node joins the cluster
+	NODE_EXIT              // Used when a Node leaves the cluster
+	HEARTBEAT              // Used when a Node is being tested
+	STAT_DATA              // Used when a Node broadcasts state info
+	STAT_REQ               // Used when a Node is requesting state info
+	NODE_RACE              // Used when a Node hits a race condition
+	NODE_REPR              // Used when a Node needs to repair its LeafSet
+)
 
 // String returns a string representation of a message.
 func (m *Message) String() string {
