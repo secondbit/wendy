@@ -246,7 +246,7 @@ func (t *routingTable) scan(id NodeID, resp chan *Node, err chan error) {
 				if entry == nil {
 					continue
 				}
-				if entry.LocalIP == "" {
+				if entry.LocalIP == "" && entry.GlobalIP == "" {
 					continue
 				}
 				entry_diff := entry.ID.Diff(id).Cmp(diff)

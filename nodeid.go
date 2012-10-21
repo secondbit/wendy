@@ -42,6 +42,11 @@ func (id NodeID) Less(other NodeID) bool {
 	return id.RelPos(other) < 0
 }
 
+// absLess returns true if id < other, disregarding modular arithmetic.
+func (id NodeID) absLess(other NodeID) bool {
+	return id[0] < other[0] || id[0] == other[0] && id[1] < other[1]
+}
+
 // TODO(eds): this could be faster and smaller with a little assembly, but not
 // sure if we want to go there.
 
@@ -104,17 +109,29 @@ func (id NodeID) CommonPrefixLen(other NodeID) int {
 	if xor := id[1] ^ other[1]; xor != 0 {
 		return digitSet(xor) | 16
 	}
-	return 32
+	return idLen
 }
 
 // differences returns the difference between the two NodeIDs in both directions.
 func (id NodeID) differences(other NodeID) (NodeID, NodeID) {
 	var d1, d2 NodeID
-	if id[0] < other[0] || id[1] < other[1] {
-		d1[0], d1[1] = other[0]-id[0], other[1]-id[1]
+	if id.absLess(other) {
+		d1[1] = other[1] - id[1]
+		// check for borrow
+		b := 0
+		if d1[1] > other[1] {
+			b = 1
+		}
+		d1[0] = other[0] - (id[0] + uint64(b))
 		d2[0], d2[1] = math.MaxUint64-d1[0], math.MaxUint64-d1[1]+1
 	} else {
-		d2[0], d2[1] = id[0]-other[0], id[1]-other[1]
+		d2[1] = id[1] - other[1]
+		// check for borrow
+		b := 0
+		if d2[1] > id[1] {
+			b = 1
+		}
+		d2[0] = id[0] - (other[0] + uint64(b))
 		d1[0], d1[1] = math.MaxUint64-d2[0], math.MaxUint64-d2[1]+1
 	}
 	return d2, d1
@@ -123,7 +140,7 @@ func (id NodeID) differences(other NodeID) (NodeID, NodeID) {
 // Diff returns the difference between two NodeIDs as an absolute value. It performs the modular arithmetic necessary to find the shortest distance between the IDs in the (2^128)-1 item nodespace.
 func (id NodeID) Diff(other NodeID) *big.Int {
 	d1, d2 := id.differences(other)
-	if d1[0] < d2[0] || d1[1] < d2[1] {
+	if d1.absLess(d2) {
 		return d1.Base10()
 	}
 	return d2.Base10()
@@ -135,8 +152,7 @@ func (id NodeID) RelPos(other NodeID) int {
 		return 0
 	}
 	d1, d2 := id.differences(other)
-	d2[0], d2[1] = math.MaxUint64-d1[0], math.MaxUint64-d1[1]+1
-	if d1[0] < d2[0] || d1[1] < d2[1] {
+	if d1.absLess(d2) {
 		return 1
 	}
 	return -1
