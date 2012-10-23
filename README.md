@@ -2,6 +2,10 @@
 
 An open source, pure-[Go](http://www.golang.org "Pretty much the best programming language ever") implementation of the [Pastry Distributed Hash Table](http://en.wikipedia.org/wiki/Pastry_(DHT\) "Pastry on Wikipedia").
 
+## Input Requested
+
+Please see [issue 7](https://github.com/secondbit/pastry/issues/7) for a discussion about the purpose and naming of this project. We are actively soliciting feedback and opinions from users of the software, and would love your input.
+
 ## Status
 [![Build Status](https://secure.travis-ci.org/secondbit/pastry.png)](http://travis-ci.org/secondbit/pastry)
 
