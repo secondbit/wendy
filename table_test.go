@@ -1,12 +1,8 @@
 package pastry
 
 import (
-	"crypto/rand"
-	"io"
-	"strconv"
-	"sync"
+	"math/rand"
 	"testing"
-	"time"
 )
 
 // Test insertion of a node into the routing table
@@ -650,29 +646,36 @@ func TestRoutingTableRouteMatch(t *testing.T) {
 ////////////////////////// Benchmarks ////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////
 
+// seed used for random number generator in all benchmarks
+const randSeed = 42
+
+var benchRand = rand.New(rand.NewSource(0))
+
+func randomNodeID() NodeID {
+	r := benchRand
+	lo := uint64(r.Uint32())<<32 | uint64(r.Uint32())
+	hi := uint64(r.Uint32())<<32 | uint64(r.Uint32())
+	return NodeID{lo, hi}
+}
+
 // How fast can we insert nodes
 func BenchmarkRoutingTableInsert(b *testing.B) {
 	b.StopTimer()
-	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	selfId, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	table := newRoutingTable(self)
 	go table.listen()
 	defer table.stop()
+	benchRand.Seed(randSeed)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		seed := strconv.FormatInt(time.Now().UnixNano()*int64(b.N), 10)
-		other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
-		other := *NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-		b.StartTimer()
+		otherId := randomNodeID()
+		other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
 		_, err = table.insertNode(other)
 	}
 }
@@ -680,22 +683,19 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 // How fast can we retrieve nodes by ID
 func BenchmarkRoutingTableGetByID(b *testing.B) {
 	b.StopTimer()
-	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	selfId, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	table := newRoutingTable(self)
 	go table.listen()
 	defer table.stop()
+	benchRand.Seed(randSeed)
 
-	seed := strconv.FormatInt(time.Now().UnixNano(), 10)
-	other_id, err := NodeIDFromBytes([]byte(seed + seed + seed))
-	if err != nil {
-		b.Fatalf(err.Error())
-	}
-	other := *NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	otherId := randomNodeID()
+	other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
 	_, err = table.insertNode(other)
 	if err != nil {
 		b.Fatalf(err.Error())
@@ -706,107 +706,65 @@ func BenchmarkRoutingTableGetByID(b *testing.B) {
 	}
 }
 
-// How fast can we route messages
-func BenchmarkRoutingTableRoute(b *testing.B) {
-	b.StopTimer()
-	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+var benchTable *routingTable
+
+func initBenchTable(b *testing.B) {
+	selfId, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	benchTable = newRoutingTable(self)
+	go benchTable.listen()
+	defer benchTable.stop()
+	benchRand.Seed(randSeed)
 
-	table := newRoutingTable(self)
-	go table.listen()
-	defer table.stop()
-
-	var wg sync.WaitGroup
-	for i := 0; i < 100000; i = i + 1 {
-		wg.Add(1)
-		go func() {
-			idBytes := make([]byte, 16)
-			_, err := io.ReadFull(rand.Reader, idBytes)
-			if err != nil {
-				b.Fatalf(err.Error())
-			}
-			id, err := NodeIDFromBytes(idBytes)
-			if err != nil {
-				b.Fatalf(err.Error())
-			}
-			node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-			_, err = table.insertNode(*node)
-			if err != nil {
-				b.Fatalf(err.Error())
-			}
-			wg.Done()
-		}()
+	for i := 0; i < 100000; i++ {
+		id := randomNodeID()
+		node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		_, err = benchTable.insertNode(*node)
+		if err != nil {
+			b.Fatal(err.Error())
+		}
 	}
-	wg.Wait()
+}
+
+// How fast can we route messages
+func BenchmarkRoutingTableRoute(b *testing.B) {
+	b.StopTimer()
+	if benchTable == nil {
+		initBenchTable(b)
+	}
+	go benchTable.listen()
+	defer benchTable.stop()
+	benchRand.Seed(randSeed)
 	b.StartTimer()
+
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		idBytes := make([]byte, 16)
-		_, err := io.ReadFull(rand.Reader, idBytes)
+		id := randomNodeID()
+		_, err := benchTable.route(id)
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
-		id, err := NodeIDFromBytes(idBytes)
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
-		b.StartTimer()
-		_, err = table.route(id)
-		b.StopTimer()
-		if err != nil {
-			b.Fatalf(err.Error())
-		}
-		b.StartTimer()
 	}
 }
 
 // How fast can we dump the nodes in the table
 func BenchmarkRoutingTableDump(b *testing.B) {
 	b.StopTimer()
-	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
-	if err != nil {
-		b.Fatalf(err.Error())
+	if benchTable == nil {
+		initBenchTable(b)
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-	table := newRoutingTable(self)
-	go table.listen()
-	defer table.stop()
-
-	var wg sync.WaitGroup
-	for i := 0; i < 100000; i = i + 1 {
-		wg.Add(1)
-		go func() {
-			idBytes := make([]byte, 16)
-			_, err := io.ReadFull(rand.Reader, idBytes)
-			if err != nil {
-				b.Fatalf(err.Error())
-			}
-			id, err := NodeIDFromBytes(idBytes)
-			if err != nil {
-				b.Fatalf(err.Error())
-			}
-			node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-			_, err = table.insertNode(*node)
-			if err != nil {
-				b.Fatalf(err.Error())
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
+	go benchTable.listen()
+	defer benchTable.stop()
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		nodes, err := table.export()
-		b.StopTimer()
+		nodes, err := benchTable.export()
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
-		if len(nodes) < 100000 {
+		if len(nodes) != 100000 {
 			b.Fatalf("Supposed to have %d nodes, have %d instead.", 100000, len(nodes))
 		}
-		b.StartTimer()
 	}
 }
