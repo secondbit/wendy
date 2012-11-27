@@ -1,4 +1,4 @@
-package pastry
+package wendy
 
 import (
 	"log"
@@ -28,7 +28,7 @@ func newRoutingTable(self *Node) *routingTable {
 		self:     self,
 		nodes:    [32][16][]*Node{},
 		kill:     make(chan bool),
-		log:      log.New(os.Stdout, "pastry#routingTable("+self.ID.String()+")", log.LstdFlags),
+		log:      log.New(os.Stdout, "wendy#routingTable("+self.ID.String()+")", log.LstdFlags),
 		logLevel: LogLevelWarn,
 		timeout:  1,
 		request:  make(chan interface{}),

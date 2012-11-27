@@ -1,4 +1,4 @@
-package pastry
+package wendy
 
 import (
 	"encoding/json"
@@ -45,11 +45,11 @@ func (c *Cluster) SetLogger(l *log.Logger) {
 
 // SetLogLevel sets the level of logging that will be written to the Logger. It will be mirrored to the child routingTable and leafSet.
 //
-// Use pastry.LogLevelDebug to write to the most verbose level of logging, helpful for debugging.
+// Use wendy.LogLevelDebug to write to the most verbose level of logging, helpful for debugging.
 //
-// Use pastry.LogLevelWarn (the default) to write on events that may, but do not necessarily, indicate an error.
+// Use wendy.LogLevelWarn (the default) to write on events that may, but do not necessarily, indicate an error.
 //
-// Use pastry.LogLevelError to write only when an event occurs that is undoubtedly an error.
+// Use wendy.LogLevelError to write only when an event occurs that is undoubtedly an error.
 func (c *Cluster) SetLogLevel(level int) {
 	c.logLevel = level
 	c.table.logLevel = level
@@ -81,7 +81,7 @@ func NewCluster(self *Node, credentials Credentials) *Cluster {
 		kill:               make(chan bool),
 		lastStateUpdate:    time.Now(),
 		applications:       []Application{},
-		log:                log.New(os.Stdout, "pastry("+self.ID.String()+") ", log.LstdFlags),
+		log:                log.New(os.Stdout, "wendy("+self.ID.String()+") ", log.LstdFlags),
 		logLevel:           LogLevelWarn,
 		heartbeatFrequency: 300,
 		networkTimeout:     10,
@@ -118,7 +118,7 @@ func (c *Cluster) Kill() {
 	c.kill <- true
 }
 
-// RegisterCallback allows anything that fulfills the Application interface to be hooked into the Pastry's callbacks.
+// RegisterCallback allows anything that fulfills the Application interface to be hooked into the Wendy's callbacks.
 func (c *Cluster) RegisterCallback(app Application) {
 	c.applications = append(c.applications, app)
 }
@@ -391,7 +391,7 @@ func (c *Cluster) onNodeExit(node Node) {
 	c.remove(node.ID)
 }
 
-// BUG(paddy@secondbit.org): If the Nodes don't agree on the time, Pastry can create an infinite loop of sending state information, detecting an erroneous race condition, and requesting state information. For the love of God, use NTP.
+// BUG(paddy@secondbit.org): If the Nodes don't agree on the time, Wendy can create an infinite loop of sending state information, detecting an erroneous race condition, and requesting state information. For the love of God, use NTP.
 func (c *Cluster) onStateReceived(msg Message) {
 	c.debug("Got state information!")
 	if c.lastStateUpdate.After(msg.Sent) {

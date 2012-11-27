@@ -1,4 +1,4 @@
-package pastry
+package wendy
 
 import (
 	"log"
@@ -30,7 +30,7 @@ func newLeafSet(self *Node) *leafSet {
 		left:     [16]*Node{},
 		right:    [16]*Node{},
 		kill:     make(chan bool),
-		log:      log.New(os.Stdout, "pastry#leafSet("+self.ID.String()+")", log.LstdFlags),
+		log:      log.New(os.Stdout, "wendy#leafSet("+self.ID.String()+")", log.LstdFlags),
 		logLevel: LogLevelWarn,
 		timeout:  1,
 		request:  make(chan interface{}),

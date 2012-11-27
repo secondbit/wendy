@@ -1,8 +1,8 @@
-/* Package pastry implements a fault-tolerant, concurrency-safe distributed hash table.
+/* Package wendy implements a fault-tolerant, concurrency-safe distributed hash table.
 
 Self-Organising Services
 
-Pastry is a package to help make your Go programs self-organising. It makes communicating between a variable number of machines easy and reliable. Machines are referred to as Nodes, which create a Cluster together. Messages can then be routed throughout the Cluster.
+Wendy is a package to help make your Go programs self-organising. It makes communicating between a variable number of machines easy and reliable. Machines are referred to as Nodes, which create a Cluster together. Messages can then be routed throughout the Cluster.
 
 Getting Started
 
@@ -12,14 +12,14 @@ Getting your own Cluster running is easy. Just create a Node, build a Cluster ar
 	if err != nil {
 		panic(err.Error())
 	}
-	id, err := pastry.NodeIDFromBytes([]byte(hostname+" test server"))
+	id, err := wendy.NodeIDFromBytes([]byte(hostname+" test server"))
 	if err != nil {
 		panic(err.Error())
 	}
-	node := pastry.NewNode(id, "your_local_ip_address", "your_global_ip_address", "your_region", 8080)
+	node := wendy.NewNode(id, "your_local_ip_address", "your_global_ip_address", "your_region", 8080)
 
-	credentials := pastry.Passphrase("I <3 Gophers.")
-	cluster := pastry.NewCluster(node, credentials)
+	credentials := wendy.Passphrase("I <3 Gophers.")
+	cluster := wendy.NewCluster(node, credentials)
 	go func() {
 		defer cluster.Stop()
 		err := cluster.Listen()
@@ -32,6 +32,6 @@ Getting your own Cluster running is easy. Just create a Node, build a Cluster ar
 
 About Credentials
 
-Credentials are an interface that is used to control access to your Cluster. Pastry provides the Passphrase implementation, which limits access to Nodes that set their Credentials to the same string. You can feel free to make your own--the only requirements are that you return a slice of bytes when the Marshal() function is called and that you return a boolean when the Valid([]byte) function is called, which should return true if the supplied slice of bytes can be unmarshaled to a valid instance of your Credentials implementation AND that valid instance should be granted access to this Cluster.
+Credentials are an interface that is used to control access to your Cluster. Wendy provides the Passphrase implementation, which limits access to Nodes that set their Credentials to the same string. You can feel free to make your own--the only requirements are that you return a slice of bytes when the Marshal() function is called and that you return a boolean when the Valid([]byte) function is called, which should return true if the supplied slice of bytes can be unmarshaled to a valid instance of your Credentials implementation AND that valid instance should be granted access to this Cluster.
 */
-package pastry
+package wendy

@@ -1,4 +1,4 @@
-package pastry
+package wendy
 
 import (
 	"time"

@@ -1,4 +1,4 @@
-package pastry
+package wendy
 
 import (
 	"errors"
@@ -23,7 +23,7 @@ const (
 	LogLevelError
 )
 
-// Application is an interface that other packages can fulfill to hook into Pastry.
+// Application is an interface that other packages can fulfill to hook into Wendy.
 //
 // OnError is called on errors that are even remotely recoverable, passing the error that was raised.
 //
@@ -41,7 +41,7 @@ const (
 type Application interface {
 	OnError(err error)
 	OnDeliver(msg Message)
-	OnForward(msg *Message, nextId NodeID) bool // return False if Pastry should not forward
+	OnForward(msg *Message, nextId NodeID) bool // return False if Wendy should not forward
 	OnNewLeaves(leafset []*Node)
 	OnNodeJoin(node Node)
 	OnNodeExit(node Node)
