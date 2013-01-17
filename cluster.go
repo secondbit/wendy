@@ -256,7 +256,7 @@ func (c *Cluster) sendHeartbeats() {
 
 func (c *Cluster) deliver(msg Message) {
 	if msg.Purpose == NODE_JOIN || msg.Purpose == NODE_EXIT || msg.Purpose == HEARTBEAT || msg.Purpose == STAT_DATA || msg.Purpose == STAT_REQ || msg.Purpose == NODE_RACE || msg.Purpose == NODE_REPR {
-		c.warn("Received utility message %s to the deliver function. Purpose was %s.", msg.Key, msg.Purpose)
+		c.warn("Received utility message %s to the deliver function. Purpose was %d.", msg.Key, msg.Purpose)
 		return
 	}
 	for _, app := range c.applications {
