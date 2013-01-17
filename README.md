@@ -199,6 +199,7 @@ The following people contributed code that found its way into Wendy:
 * Paddy Foran ([paddyforan](https://github.com/paddyforan))
 * Jesse McNelis ([jessta](https://github.com/jessta))
 * Evan Shaw ([edsrzf](https://github.com/edsrzf))
+* Alec Thomas ([alecthomas](https://github.com/alecthomas))
 
 ## Contributors
 
