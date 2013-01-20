@@ -170,33 +170,9 @@ func (c *Cluster) Listen() error {
 // Send routes a message through the Cluster.
 func (c *Cluster) Send(msg Message) error {
 	c.debug("Getting target for message %s", msg.Key)
-	target, err := c.leafset.route(msg.Key)
+	target, err := c.Route(msg.Key)
 	if err != nil {
-		if _, ok := err.(IdentityError); ok {
-			c.debug("I'm the target. Delivering message %s", msg.Key)
-			c.deliver(msg)
-			return nil
-		}
-		if err != nodeNotFoundError {
-			return err
-		}
-		if target != nil {
-			c.debug("Target acquired in leafset.")
-		}
-	}
-	if target == nil {
-		c.debug("Target not found in leaf set, checking routing table.")
-		target, err = c.table.route(msg.Key)
-		if err != nil {
-			if _, ok := err.(IdentityError); ok {
-				c.deliver(msg)
-				return nil
-			}
-			if err != nodeNotFoundError {
-				return err
-			}
-		}
-		c.debug("Target acquired in routing table.")
+		return err
 	}
 	if target == nil {
 		c.debug("Couldn't find a target. Delivering message %s", msg.Key)
@@ -218,6 +194,40 @@ func (c *Cluster) Send(msg Message) error {
 	}
 	c.debug("Message %s wasn't forwarded because callback terminated it.", msg.Key)
 	return nil
+}
+
+// Route checks the leafSet and routingTable to see if there's an appropriate match for the NodeID. If there is a better match than the current Node, a pointer to that Node is returned. Otherwise, nil is returned (and the message should be delivered).
+func (c *Cluster) Route(key NodeID) (*Node, error) {
+	target, err := c.leafset.route(key)
+	if err != nil {
+		if _, ok := err.(IdentityError); ok {
+			c.debug("I'm the target. Delivering message %s", key)
+			return nil, nil
+		}
+		if err != nodeNotFoundError {
+			return nil, err
+		}
+		if target != nil {
+			c.debug("Target acquired in leafset.")
+			return target, nil
+		}
+	}
+	c.debug("Target not found in leaf set, checking routing table.")
+	target, err = c.table.route(key)
+	if err != nil {
+		if _, ok := err.(IdentityError); ok {
+			c.debug("I'm the target. Delivering message %s", key)
+			return nil, nil
+		}
+		if err != nodeNotFoundError {
+			return nil, err
+		}
+	}
+	if target != nil {
+		c.debug("Target acquired in routing table.")
+		return target, nil
+	}
+	return nil, nil
 }
 
 // Join announces a Node's presence to the Cluster, kicking off a process that will populate its child leafSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
