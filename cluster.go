@@ -167,6 +167,17 @@ func (c *Cluster) Listen() error {
 	return nil
 }
 
+// Is a NodeID local or remote?
+func (c *Cluster) IsLocal(id NodeID) bool {
+	_, err := c.leafset.route(id)
+	if err != nil {
+		if _, ok := err.(IdentityError); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // Send routes a message through the Cluster.
 func (c *Cluster) Send(msg Message) error {
 	c.debug("Getting target for message %s", msg.Key)
