@@ -40,37 +40,6 @@ func TestLeafSetinsertNode(t *testing.T) {
 	}
 }
 
-// Test handling of a Node being inserted twice.
-func TestLeafSetDoubleinsertNode(t *testing.T) {
-	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
-	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	t.Log(other)
-	leafset := newLeafSet(self)
-	r, err := leafset.insertNode(*other)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	if r == nil {
-		t.Fatalf("First insert returned a nil response.")
-	}
-	r2, err := leafset.insertNode(*other)
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-	if r2 != nil {
-		t.Fatalf("Expected a nil response, got %s instead.", r2.ID)
-	}
-}
-
 // Test deleting the only node from the leafset
 func TestLeafSetDeleteOnly(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))

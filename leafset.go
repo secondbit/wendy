@@ -166,14 +166,12 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, boo
 	result_index := 0
 	src_index := 0
 	pos := -1
-	inserted := false
 	for result_index < len(result) {
 		result[result_index] = array[src_index]
 		if array[src_index] == nil {
 			if pos < 0 {
 				result[result_index] = node
 				pos = result_index
-				inserted = true
 			}
 			break
 		}
@@ -186,13 +184,12 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, boo
 		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 && pos < 0 {
 			result[result_index] = node
 			pos = result_index
-			inserted = true
 		} else {
 			src_index += 1
 		}
 		result_index += 1
 	}
-	return result, inserted
+	return result, pos > -1
 }
 
 func (l *leafSet) removeNode(id NodeID) (*Node, error) {
