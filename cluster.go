@@ -33,9 +33,9 @@ func (m stateMask) includeNS() bool {
 }
 
 type stateTables struct {
-	RoutingTable [32][16]Node
-	LeafSet      [2][]Node
-	//TODO: neighborhood set
+	RoutingTable    [32][16]Node
+	LeafSet         [2][]Node
+	NeighborhoodSet [32]Node
 }
 
 // Cluster holds the information about the state of the network. It is the main interface to the distributed network of Nodes.
@@ -43,6 +43,7 @@ type Cluster struct {
 	self               *Node
 	table              *routingTable
 	leafset            *leafSet
+	neighborhoodset    *neighborhoodSet
 	kill               chan bool
 	lastStateUpdate    time.Time
 	applications       []Application
@@ -99,6 +100,7 @@ func NewCluster(self *Node, credentials Credentials) *Cluster {
 		self:               self,
 		table:              newRoutingTable(self),
 		leafset:            newLeafSet(self),
+		neighborhoodset:    newNeighborhoodSet(self),
 		kill:               make(chan bool),
 		lastStateUpdate:    time.Now(),
 		applications:       []Application{},
@@ -117,6 +119,8 @@ func (c *Cluster) Stop() {
 	c.debug("Sending graceful exit message.")
 	msg := c.NewMessage(NODE_EXIT, c.self.ID, []byte{})
 	nodes := c.table.list()
+	nodes = append(nodes, c.leafset.list()...)
+	nodes = append(nodes, c.neighborhoodset.list()...)
 	for _, node := range nodes {
 		err := c.send(msg, node)
 		if err != nil {
@@ -232,7 +236,7 @@ func (c *Cluster) Send(msg Message) error {
 	return nil
 }
 
-// Join announces a Node's presence to the Cluster, kicking off a process that will populate its child leafSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
+// Join expresses a Node's desire to join the Cluster, kicking off a process that will populate its child leafSet, neighborhoodSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
 //
 // The IP and port passed to Join should be those of a known Node in the Cluster. The algorithm assumes that the known Node is close in proximity to the current Node, but that is not a hard requirement.
 func (c *Cluster) Join(ip string, port int) error {

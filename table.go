@@ -48,6 +48,7 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 		// TODO: handle conflict
 	} else {
 		t.nodes[row][col] = node
+		t.self.incrementRTVersion()
 		return node, nil
 	}
 	return nil, nil
@@ -116,6 +117,7 @@ func (t *routingTable) removeNode(id NodeID) (*Node, error) {
 	if t.nodes[row][col] != nil && t.nodes[row][col].ID.Equals(id) {
 		resp := t.nodes[row][col]
 		t.nodes[row][col] = nil
+		t.self.incrementRTVersion()
 		return resp, nil
 	} else {
 		return nil, nodeNotFoundError

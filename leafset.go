@@ -41,6 +41,7 @@ func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port
 		if !inserted {
 			return nil, nil
 		} else {
+			l.self.incrementLSVersion()
 			return node, nil
 		}
 	} else if side == 1 {
@@ -48,6 +49,7 @@ func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port
 		if !inserted {
 			return nil, nil
 		} else {
+			l.self.incrementLSVersion()
 			return node, nil
 		}
 	}
@@ -257,6 +259,7 @@ func (l *leafSet) removeNode(id NodeID) (*Node, error) {
 			}
 		}
 	}
+	l.self.incrementLSVersion()
 	return n, nil
 }
 

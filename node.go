@@ -2,6 +2,7 @@ package wendy
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -23,14 +24,17 @@ type Node struct {
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
 func NewNode(id NodeID, local, global, region string, port int) *Node {
 	return &Node{
-		ID:            id,
-		LocalIP:       local,
-		GlobalIP:      global,
-		Port:          port,
-		Region:        region,
-		proximity:     0,
-		mutex:         new(sync.Mutex),
-		lastHeardFrom: time.Now(),
+		ID:                     id,
+		LocalIP:                local,
+		GlobalIP:               global,
+		Port:                   port,
+		Region:                 region,
+		proximity:              0,
+		mutex:                  new(sync.Mutex),
+		lastHeardFrom:          time.Now(),
+		LeafsetVersion:         0,
+		RoutingTableVersion:    0,
+		NeighborhoodSetVersion: 0,
 	}
 }
 
@@ -65,4 +69,16 @@ func (self *Node) LastHeardFrom() time.Time {
 	self.mutex.Lock()
 	self.mutex.Unlock()
 	return self.lastHeardFrom
+}
+
+func (self *Node) incrementLSVersion() {
+	atomic.AddUint64(&self.LeafsetVersion, 1)
+}
+
+func (self *Node) incrementRTVersion() {
+	atomic.AddUint64(&self.RoutingTableVersion, 1)
+}
+
+func (self *Node) incrementNSVersion() {
+	atomic.AddUint64(&self.NeighborhoodSetVersion, 1)
 }
