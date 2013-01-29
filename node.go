@@ -7,14 +7,17 @@ import (
 
 // Node represents a specific machine in the cluster.
 type Node struct {
-	LocalIP       string // The IP through which the Node should be accessed by other Nodes with an identical Region
-	GlobalIP      string // The IP through which the Node should be accessed by other Nodes whose Region differs
-	Port          int    // The port the Node is listening on
-	Region        string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
-	ID            NodeID
-	proximity     int64       // The raw proximity score for the Node, not adjusted for Region
-	mutex         *sync.Mutex // lock and unlock a Node for concurrency safety
-	lastHeardFrom time.Time   // The last time we heard from this node
+	LocalIP                string // The IP through which the Node should be accessed by other Nodes with an identical Region
+	GlobalIP               string // The IP through which the Node should be accessed by other Nodes whose Region differs
+	Port                   int    // The port the Node is listening on
+	Region                 string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
+	ID                     NodeID
+	proximity              int64       // The raw proximity score for the Node, not adjusted for Region
+	mutex                  *sync.Mutex // lock and unlock a Node for concurrency safety
+	lastHeardFrom          time.Time   // The last time we heard from this node
+	LeafsetVersion         uint64      // the version number of the leafset
+	RoutingTableVersion    uint64      // the version number of the routing table
+	NeighborhoodSetVersion uint64      // the version number of the neighborhood set
 }
 
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.

@@ -11,6 +11,33 @@ import (
 	"time"
 )
 
+type stateMask byte
+
+const (
+	rT = stateMask(1 << iota)
+	lS
+	nS
+	all = rT | lS | nS
+)
+
+func (m stateMask) includeRT() bool {
+	return m == (m & rT)
+}
+
+func (m stateMask) includeLS() bool {
+	return m == (m & lS)
+}
+
+func (m stateMask) includeNS() bool {
+	return m == (m & nS)
+}
+
+type stateTables struct {
+	RoutingTable [32][16]Node
+	LeafSet      [2][]Node
+	//TODO: neighborhood set
+}
+
 // Cluster holds the information about the state of the network. It is the main interface to the distributed network of Nodes.
 type Cluster struct {
 	self               *Node
@@ -66,12 +93,6 @@ func (c *Cluster) SetNetworkTimeout(timeout int) {
 	c.networkTimeout = timeout
 }
 
-// SetChannelTimeouts sets the number of seconds before which channel requests will be considered timed out and return an error for the Cluster's leafSet and routingTable.
-func (c *Cluster) SetChannelTimeouts(timeout int) {
-	c.table.timeout = timeout
-	c.leafset.timeout = timeout
-}
-
 // NewCluster creates a new instance of a connection to the network and intialises the state tables and channels it requires.
 func NewCluster(self *Node, credentials Credentials) *Cluster {
 	return &Cluster{
@@ -95,12 +116,9 @@ func NewCluster(self *Node, credentials Credentials) *Cluster {
 func (c *Cluster) Stop() {
 	c.debug("Sending graceful exit message.")
 	msg := c.NewMessage(NODE_EXIT, c.self.ID, []byte{})
-	nodes, err := c.table.export()
-	if err != nil {
-		c.fanOutError(err)
-	}
+	nodes := c.table.list()
 	for _, node := range nodes {
-		err = c.send(msg, node)
+		err := c.send(msg, node)
 		if err != nil {
 			c.fanOutError(err)
 		}
@@ -113,8 +131,6 @@ func (c *Cluster) Stop() {
 // Unlike Stop, Kill immediately disconnects the Node without sending a message to let other Nodes know of its exit.
 func (c *Cluster) Kill() {
 	c.debug("Exiting the cluster.")
-	c.table.stop()
-	c.leafset.stop()
 	c.kill <- true
 }
 
@@ -129,12 +145,8 @@ func (c *Cluster) RegisterCallback(app Application) {
 func (c *Cluster) Listen() error {
 	portstr := strconv.Itoa(c.self.Port)
 	c.debug("Listening on port %d", c.self.Port)
-	go c.table.listen()
-	go c.leafset.listen()
 	ln, err := net.Listen("tcp", ":"+portstr)
 	if err != nil {
-		c.table.stop()
-		c.leafset.stop()
 		return err
 	}
 	defer ln.Close()
@@ -240,13 +252,10 @@ func (c *Cluster) fanOutError(err error) {
 
 func (c *Cluster) sendHeartbeats() {
 	msg := c.NewMessage(HEARTBEAT, c.self.ID, []byte{})
-	nodes, err := c.table.export()
-	if err != nil {
-		c.fanOutError(err)
-	}
+	nodes := c.table.list()
 	for _, node := range nodes {
 		c.debug("Sending heartbeat to %s", node.ID)
-		err = c.send(msg, node)
+		err := c.send(msg, node)
 		if err == deadNodeError {
 			c.remove(node.ID)
 			continue
@@ -282,10 +291,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		return
 	}
 	if msg.Purpose != NODE_JOIN {
-		node, err := c.table.getNode(msg.Sender.ID)
-		if err == nodeNotFoundError {
-			_, node = c.insert(msg.Sender)
-		}
+		node, _ := c.table.getNode(msg.Sender.ID)
 		if node != nil {
 			node.updateLastHeardFrom()
 			node.setProximity(time.Since(msg.Sent).Nanoseconds())
@@ -296,6 +302,9 @@ func (c *Cluster) handleClient(conn net.Conn) {
 	switch msg.Purpose {
 	case NODE_JOIN:
 		c.onNodeJoin(msg)
+		break
+	case NODE_ANN:
+		c.onNodeAnnounce(msg)
 		break
 	case NODE_EXIT:
 		c.onNodeExit(msg.Sender)
@@ -369,21 +378,27 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 
 // Our message handlers!
 
+// A node wants to join the cluster. We need to route its message as we normally would, but we should also send it our state tables as appropriate.
 func (c *Cluster) onNodeJoin(msg Message) {
 	c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
 	err := c.Send(msg)
 	if err != nil {
 		c.fanOutError(err)
 	}
-	c.insert(msg.Sender)
-	err = c.sendStateTables(msg.Sender, true, true)
+	// TODO: only send appropriate state tables
+	err = c.sendStateTables(msg.Sender, rT|lS)
 	if err != nil {
-		if err == deadNodeError {
-			c.remove(msg.Sender.ID)
-		} else {
+		if err != deadNodeError {
 			c.fanOutError(err)
 		}
 	}
+}
+
+// A node has joined the cluster. We need to decide if it belongs in our state tables and if the nodes in the state tables it sends us belong in our state tables. If the version of our state tables it sends to us doesn't match our local version, we need to resend our state tables to prevent a race condition.
+func (c *Cluster) onNodeAnnounce(msg Message) {
+	c.debug("\0333[4;31mNode %s announced its presence!\033[0m", msg.Key)
+	// TODO: update state tables with node and state tables
+	// TODO: compare c.self.LeafsetVersion, c.self.RoutingTableVersion, and c.self.NeighborhoodSetVersion against the versions the message uses. If there's a mismatch, send a race condition message with new state tables
 }
 
 func (c *Cluster) onNodeExit(node Node) {
@@ -391,33 +406,8 @@ func (c *Cluster) onNodeExit(node Node) {
 	c.remove(node.ID)
 }
 
-// BUG(paddy@secondbit.org): If the Nodes don't agree on the time, Wendy can create an infinite loop of sending state information, detecting an erroneous race condition, and requesting state information. For the love of God, use NTP.
 func (c *Cluster) onStateReceived(msg Message) {
-	c.debug("Got state information!")
-	if c.lastStateUpdate.After(msg.Sent) {
-		c.warn("Detected race condition. %s sent the message at %s, but we last updated our state tables at %s. Notifying %s.", msg.Sender.ID, msg.Sent, c.lastStateUpdate, msg.Sender.ID)
-		message := c.NewMessage(NODE_RACE, msg.Sender.ID, []byte{})
-		target, err := c.table.getNode(msg.Sender.ID)
-		if err != nil {
-			if err == nodeNotFoundError {
-				target, _ = c.insert(msg.Sender)
-			} else if _, ok := err.(IdentityError); ok {
-				c.warn("Apparently received state information from myself...?")
-				return
-			} else {
-				c.fanOutError(err)
-			}
-		}
-		if target != nil {
-			err = c.send(message, target)
-			if err != nil {
-				c.fanOutError(err)
-			}
-		} else {
-			c.warn("Node ended up being nil (probably due to errors) when trying to respond to a race condition message.")
-		}
-		return
-	}
+	// TODO: distinguish between routing table, leaf set, and neighborhood set.
 	var state []Node
 	err := json.Unmarshal(msg.Value, &state)
 	if err != nil {
@@ -434,17 +424,20 @@ func (c *Cluster) onStateReceived(msg Message) {
 
 func (c *Cluster) onStateRequested(node Node) {
 	c.debug("%s wants to know about my state tables!", node.ID)
-	c.sendStateTables(node, true, true)
+	// TODO: only send appropriate state tables
+	c.sendStateTables(node, rT|lS)
 }
 
 func (c *Cluster) onRaceCondition(node Node) {
 	c.debug("Race condition. Awkward.")
-	c.sendStateTables(node, true, true)
+	// TODO: update state tables with attached state information
+	// TODO: re-announce presence to all known nodes
 }
 
 func (c *Cluster) onRepairRequest(node Node) {
 	c.debug("Helping to repair %s", node.ID)
-	c.sendStateTables(node, false, true)
+	// TODO: specialise this on a per-state table basis
+	c.sendStateTables(node, lS)
 }
 
 func (c *Cluster) onMessageReceived(msg Message) {
@@ -453,24 +446,26 @@ func (c *Cluster) onMessageReceived(msg Message) {
 	if err != nil {
 		c.fanOutError(err)
 	}
-	c.insert(msg.Sender)
 }
 
-func (c *Cluster) sendStateTables(node Node, table, leafset bool) error {
-	var state []*Node
-	if table {
-		dump, err := c.table.export()
-		if err != nil {
-			return err
-		}
-		state = append(state, dump...)
+func (c *Cluster) dumpStateTables(tables stateMask) (stateTables, error) {
+	var state stateTables
+	if tables.includeRT() {
+		state.RoutingTable = c.table.export()
 	}
-	if leafset {
-		dump, err := c.table.export()
-		if err != nil {
-			return err
-		}
-		state = append(state, dump...)
+	if tables.includeLS() {
+		state.LeafSet = c.leafset.export()
+	}
+	if tables.includeNS() {
+		// TODO: export neighborhood set
+	}
+	return state, nil
+}
+
+func (c *Cluster) sendStateTables(node Node, tables stateMask) error {
+	state, err := c.dumpStateTables(tables)
+	if err != nil {
+		return err
 	}
 	data, err := json.Marshal(state)
 	if err != nil {
@@ -479,9 +474,7 @@ func (c *Cluster) sendStateTables(node Node, table, leafset bool) error {
 	msg := c.NewMessage(STAT_DATA, c.self.ID, data)
 	target, err := c.table.getNode(node.ID)
 	if err != nil {
-		if err == nodeNotFoundError {
-			c.insert(node)
-		} else if _, ok := err.(IdentityError); !ok {
+		if _, ok := err.(IdentityError); !ok && err != nodeNotFoundError {
 			return err
 		}
 	}
@@ -509,10 +502,7 @@ func (c *Cluster) insert(node Node) (leafset, rt *Node) {
 	c.debug("Finished trying to insert %s into the leaf set.", node.ID)
 	if resp2 != nil {
 		c.debug("Inserted node %s into the leaf set.", node.ID)
-		leaves, err := c.leafset.export()
-		if err != nil {
-			c.fanOutError(err)
-		}
+		leaves := c.leafset.list()
 		for _, app := range c.applications {
 			app.OnNewLeaves(leaves)
 		}
@@ -541,10 +531,7 @@ func (c *Cluster) remove(id NodeID) {
 		}
 	}
 	if resp2 != nil {
-		leaves, err := c.leafset.export()
-		if err != nil {
-			c.fanOutError(err)
-		}
+		leaves := c.leafset.list()
 		for _, app := range c.applications {
 			app.OnNewLeaves(leaves)
 		}

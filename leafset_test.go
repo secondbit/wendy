@@ -21,8 +21,6 @@ func TestLeafSetinsertNode(t *testing.T) {
 	t.Logf("%s\n", other_id.String())
 	t.Logf("Diff: %v\n", self_id.Diff(other_id))
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 	r, err := leafset.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -57,8 +55,6 @@ func TestLeafSetDoubleinsertNode(t *testing.T) {
 	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
 	t.Log(other)
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 	r, err := leafset.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -89,8 +85,6 @@ func TestLeafSetDeleteOnly(t *testing.T) {
 	}
 	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 	r, err := leafset.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -139,8 +133,6 @@ func TestLeafSetDeleteFirst(t *testing.T) {
 		t.Fatalf("Expected %v, got %v.", first_side, second_side)
 	}
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 	r, err := leafset.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -213,8 +205,6 @@ func TestLeafSetDeleteLast(t *testing.T) {
 		t.Fatalf("Expected %v, got %v.", first_side, second_side)
 	}
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 	r, err := leafset.insertNode(*other)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -293,8 +283,6 @@ func TestLeafSetDeleteMiddle(t *testing.T) {
 		t.Fatalf("Nodes not all on same side. %v, %v, %v", first_side, second_side, third_side)
 	}
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 	r, err := leafset.insertNode(*first)
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -391,8 +379,6 @@ func TestLeafSetScanSplit(t *testing.T) {
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 
 	first_id, err := NodeIDFromBytes([]byte("12345677890abcde"))
 	if err != nil {
@@ -460,8 +446,6 @@ func TestLeafSetRouteOnly(t *testing.T) {
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
 	if err != nil {
@@ -505,8 +489,6 @@ func TestLeafSetRouteMatch(t *testing.T) {
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
 	if err != nil {
@@ -548,8 +530,6 @@ func TestLeafSetRouteNoneContained(t *testing.T) {
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890abcdeh"))
 	if err != nil {
@@ -589,8 +569,6 @@ func TestLeafSetRouteNoneCloser(t *testing.T) {
 	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
 
 	leafset := newLeafSet(self)
-	go leafset.listen()
-	defer leafset.stop()
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890abcdez"))
 	if err != nil {

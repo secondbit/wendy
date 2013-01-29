@@ -15,13 +15,14 @@ type Message struct {
 }
 
 const (
-	NODE_JOIN = byte(iota) // Used when a Node joins the cluster
+	NODE_JOIN = byte(iota) // Used when a Node wishes to join the cluster
 	NODE_EXIT              // Used when a Node leaves the cluster
 	HEARTBEAT              // Used when a Node is being tested
 	STAT_DATA              // Used when a Node broadcasts state info
 	STAT_REQ               // Used when a Node is requesting state info
 	NODE_RACE              // Used when a Node hits a race condition
 	NODE_REPR              // Used when a Node needs to repair its LeafSet
+	NODE_ANN               // Used when a Node broadcasts its presence
 )
 
 // String returns a string representation of a message.
