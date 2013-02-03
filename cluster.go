@@ -247,6 +247,10 @@ func (c *Cluster) Listen() error {
 			c.debug("Handling connection.")
 			go c.handleClient(conn)
 			break
+		case <-c.prxCacheTicker:
+			c.debug("Emptying proximity cache...")
+			go c.clearProximityCache()
+			break
 		}
 	}
 	return nil
