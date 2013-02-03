@@ -481,9 +481,13 @@ func (c *Cluster) onStateReceived(msg Message) {
 	if err != nil {
 		c.fanOutError(err)
 	}
-	// TODO: detect whether the node has announced its presence yet
-	// TODO: if the node hasn't announced its presence, detect if this message is from the last node to receive the join message
-	// TODO: if this message is from the last node to receive the join message, wait a little bit to make sure other nodes weren't just slow, then announce your presence
+	if !c.joined {
+		time.Sleep(time.Duration(2 * c.networkTimeout))
+		err = c.announcePresence()
+		if err != nil {
+			c.fanOutError(err)
+		}
+	}
 }
 
 func (c *Cluster) onStateRequested(msg Message) {
@@ -503,7 +507,10 @@ func (c *Cluster) onRaceCondition(msg Message) {
 	if err != nil {
 		c.fanOutError(err)
 	}
-	// TODO: re-announce presence to all known nodes
+	err = c.announcePresence()
+	if err != nil {
+		c.fanOutError(err)
+	}
 }
 
 func (c *Cluster) onRepairRequest(msg Message) {
@@ -583,6 +590,36 @@ func (c *Cluster) sendRaceNotification(node Node, tables StateMask) error {
 	return c.send(msg, target)
 }
 
+func (c *Cluster) announcePresence() error {
+	// TODO: get list of nodes in state tables
+	// TODO: loop through nodes in state tables
+	// TODO: create message with state tables
+	// TODO: set message state table counters to node state table counters
+	// TODO: send message to node
+	c.joined = true
+	return nil
+}
+
+func (c *Cluster) repairLeafset(id NodeID) error {
+	// TODO: get the node one step further from the center than the failed node
+	// TODO: send repair request
+	return nil
+}
+
+func (c *Cluster) repairTable(id NodeID) error {
+	// TODO: get a list of nodes in the same row
+	// TODO: request the entry in the same row and column as the failed node from each node in the same row until one has a result
+	// TODO: if no nodes remain in the row or none has a result, repeat the process with successively lower (0->1->2) rows
+	return nil
+}
+
+func (c *Cluster) repairNeighborhood() error {
+	// TODO: get a list of nodes in the neighborhood
+	// TODO: request the neighborhood from each node in the neigborhood
+	// TODO: select the closest nodes from the results, based on the proximity metric
+	return nil
+}
+
 func (c *Cluster) updateProximity(node *Node) error {
 	// TODO: update Node proximity
 	return nil
@@ -630,26 +667,20 @@ func (c *Cluster) insert(node Node) error {
 	if node.proximity <= 0 {
 		c.updateProximity(&node)
 	}
-	resp, err := c.table.insertNode(node, c.self.Proximity(&node))
+	_, err := c.table.insertNode(node, c.self.Proximity(&node))
 	if err != nil {
 		return err
 	}
-	if resp != nil {
-		// TODO: fire table update callbacks
-	}
-	resp, err = c.leafset.insertNode(node)
+	resp, err := c.leafset.insertNode(node)
 	if err != nil {
 		return err
 	}
 	if resp != nil {
 		// TODO: fire leafset update callbacks
 	}
-	resp, err = c.neighborhoodset.insertNode(node)
+	_, err = c.neighborhoodset.insertNode(node)
 	if err != nil {
 		return err
-	}
-	if resp != nil {
-		// TODO: fire neighborhoodset update callbacks
 	}
 	return nil
 }
@@ -660,15 +691,20 @@ func (c *Cluster) remove(id NodeID) error {
 		return err
 	}
 	if resp != nil {
-		// TODO: kick off table repair if necessary
-		// TODO: fire table update callbacks
+		err = c.repairTable(resp.ID)
+		if err != nil {
+			return err
+		}
 	}
 	resp, err = c.leafset.removeNode(id)
 	if err != nil {
 		return err
 	}
 	if resp != nil {
-		// TODO: kick off leafset repair if necessary
+		err = c.repairLeafset(resp.ID)
+		if err != nil {
+			return err
+		}
 		// TODO: fire leafset update callbacks
 	}
 	resp, err = c.neighborhoodset.removeNode(id)
@@ -676,8 +712,10 @@ func (c *Cluster) remove(id NodeID) error {
 		return err
 	}
 	if resp != nil {
-		// TODO: kick off neighborhoodset repair if necessary
-		// TODO: fire neighborhoodset update callbacks
+		err = c.repairNeighborhood()
+		if err != nil {
+			return err
+		}
 	}
 	return nil
 }
