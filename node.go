@@ -38,6 +38,11 @@ func NewNode(id NodeID, local, global, region string, port int) *Node {
 	}
 }
 
+// IsZero returns whether or the given Node has been initialised or if it's an empty Node struct. IsZero returns true if the Node has been initialised, false if it's an empty struct.
+func (self Node) IsZero() bool {
+	return self.LocalIP == "" && self.GlobalIP == "" && self.Port == 0
+}
+
 // Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
 func (self *Node) Proximity(n *Node) int64 {
 	if n == nil {

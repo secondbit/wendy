@@ -144,14 +144,32 @@ func (t *routingTable) list() []*Node {
 	return nodes
 }
 
-func (t *routingTable) export() [32][16]Node {
+func (t *routingTable) export(rows, cols []int) [32][16]Node {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	nodes := [32][16]Node{}
-	for rowNo, row := range t.nodes {
-		for colNo, node := range row {
-			if node != nil {
-				nodes[rowNo][colNo] = *node
+	if len(rows) > 0 {
+		for _, row := range rows {
+			if len(cols) > 0 {
+				for _, col := range cols {
+					if t.nodes[row][col] != nil {
+						nodes[row][col] = *(t.nodes[row][col])
+					}
+				}
+			} else {
+				for col, node := range t.nodes[row] {
+					if node != nil {
+						nodes[row][col] = *node
+					}
+				}
+			}
+		}
+	} else {
+		for rowNo, row := range t.nodes {
+			for colNo, node := range row {
+				if node != nil {
+					nodes[rowNo][colNo] = *node
+				}
 			}
 		}
 	}
