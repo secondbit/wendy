@@ -130,14 +130,32 @@ func (t *routingTable) removeNode(id NodeID) (*Node, error) {
 	return nil, nil
 }
 
-func (t *routingTable) list() []*Node {
+func (t *routingTable) list(rows, cols []int) []*Node {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 	nodes := []*Node{}
-	for _, row := range t.nodes {
-		for _, col := range row {
-			if col != nil {
-				nodes = append(nodes, col)
+	if len(rows) > 0 {
+		for _, row := range rows {
+			if len(cols) > 0 {
+				for _, col := range cols {
+					if t.nodes[row][col] != nil {
+						nodes = append(nodes, t.nodes[row][col])
+					}
+				}
+			} else {
+				for _, col := range t.nodes[row] {
+					if col != nil {
+						nodes = append(nodes, col)
+					}
+				}
+			}
+		}
+	} else {
+		for _, row := range t.nodes {
+			for _, col := range row {
+				if col != nil {
+					nodes = append(nodes, col)
+				}
 			}
 		}
 	}

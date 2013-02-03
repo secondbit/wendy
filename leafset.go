@@ -84,6 +84,49 @@ func (l *leafSet) getNode(id NodeID) (*Node, error) {
 	return nil, nodeNotFoundError
 }
 
+func (l *leafSet) getNextNode(id NodeID) (*Node, error) {
+	l.lock.RLock()
+	defer l.lock.RUnlock()
+	side := l.self.ID.RelPos(id)
+	last := -1
+	if side == -1 {
+		for pos, node := range l.left {
+			if node == nil {
+				continue
+			} else {
+				last = pos
+				if node.ID.Less(id) {
+					return node, nil
+				}
+				continue
+			}
+		}
+		if last > -1 {
+			return l.left[last], nil
+		}
+		return nil, nodeNotFoundError
+	} else if side == 1 {
+		for pos, node := range l.right {
+			if node == nil {
+				continue
+			} else {
+				last = pos
+				if id.Less(node.ID) {
+					return node, nil
+				}
+				continue
+			}
+		}
+		if last > -1 {
+			return l.left[last], nil
+		}
+		return nil, nodeNotFoundError
+	} else {
+		return nil, throwIdentityError("get next", "from", "leaf set")
+	}
+	return nil, nodeNotFoundError
+}
+
 func (l *leafSet) route(key NodeID) (*Node, error) {
 	l.lock.RLock()
 	defer l.lock.RUnlock()

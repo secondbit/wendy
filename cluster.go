@@ -124,7 +124,7 @@ func NewCluster(self *Node, credentials Credentials) *Cluster {
 func (c *Cluster) Stop() {
 	c.debug("Sending graceful exit message.")
 	msg := c.NewMessage(NODE_EXIT, c.self.ID, []byte{})
-	nodes := c.table.list()
+	nodes := c.table.list([]int{}, []int{})
 	nodes = append(nodes, c.leafset.list()...)
 	nodes = append(nodes, c.neighborhoodset.list()...)
 	for _, node := range nodes {
@@ -273,7 +273,7 @@ func (c *Cluster) fanOutError(err error) {
 
 func (c *Cluster) sendHeartbeats() {
 	msg := c.NewMessage(HEARTBEAT, c.self.ID, []byte{})
-	nodes := c.table.list()
+	nodes := c.table.list([]int{}, []int{})
 	nodes = append(nodes, c.leafset.list()...)
 	nodes = append(nodes, c.neighborhoodset.list()...)
 	for _, node := range nodes {
@@ -591,32 +591,94 @@ func (c *Cluster) sendRaceNotification(node Node, tables StateMask) error {
 }
 
 func (c *Cluster) announcePresence() error {
-	// TODO: get list of nodes in state tables
-	// TODO: loop through nodes in state tables
-	// TODO: create message with state tables
-	// TODO: set message state table counters to node state table counters
-	// TODO: send message to node
+	state, err := c.dumpStateTables(StateMask{Mask: all})
+	if err != nil {
+		return err
+	}
+	data, err := bson.Marshal(state)
+	if err != nil {
+		return err
+	}
+	msg := c.NewMessage(NODE_ANN, c.self.ID, data)
+	nodes := c.table.list([]int{}, []int{})
+	nodes = append(nodes, c.leafset.list()...)
+	nodes = append(nodes, c.neighborhoodset.list()...)
+	for _, node := range nodes {
+		c.debug("Announcing presence to %s", node.ID)
+		msg.LSVersion = node.leafsetVersion
+		msg.RTVersion = node.routingTableVersion
+		msg.NSVersion = node.neighborhoodSetVersion
+		err := c.send(msg, node)
+		if err == deadNodeError {
+			err = c.remove(node.ID)
+			if err != nil {
+				c.fanOutError(err)
+			}
+			continue
+		}
+	}
 	c.joined = true
 	return nil
 }
 
 func (c *Cluster) repairLeafset(id NodeID) error {
-	// TODO: get the node one step further from the center than the failed node
-	// TODO: send repair request
-	return nil
+	target, err := c.leafset.getNextNode(id)
+	if err != nil {
+		if err == nodeNotFoundError {
+			c.warn("No node found when trying to repair the leafset. Was there a catastrophe?")
+		} else {
+			return err
+		}
+	}
+	mask := StateMask{Mask: lS}
+	data, err := bson.Marshal(mask)
+	if err != nil {
+		return err
+	}
+	msg := c.NewMessage(NODE_REPR, id, data)
+	return c.send(msg, target)
 }
 
 func (c *Cluster) repairTable(id NodeID) error {
-	// TODO: get a list of nodes in the same row
-	// TODO: request the entry in the same row and column as the failed node from each node in the same row until one has a result
-	// TODO: if no nodes remain in the row or none has a result, repeat the process with successively lower (0->1->2) rows
+	row := c.self.ID.CommonPrefixLen(id)
+	reqRow := row
+	col := int(id.Digit(row))
+	targets := []*Node{}
+	for len(targets) < 1 && row < len(c.table.nodes) {
+		targets = c.table.list([]int{row}, []int{})
+		if len(targets) < 1 {
+			row = row + 1
+		}
+	}
+	mask := StateMask{Mask: rT, Rows: []int{reqRow}, Cols: []int{col}}
+	data, err := bson.Marshal(mask)
+	if err != nil {
+		return err
+	}
+	msg := c.NewMessage(NODE_REPR, c.self.ID, data)
+	for _, target := range targets {
+		err = c.send(msg, target)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 func (c *Cluster) repairNeighborhood() error {
-	// TODO: get a list of nodes in the neighborhood
-	// TODO: request the neighborhood from each node in the neigborhood
-	// TODO: select the closest nodes from the results, based on the proximity metric
+	targets := c.neighborhoodset.list()
+	mask := StateMask{Mask: nS}
+	data, err := bson.Marshal(mask)
+	if err != nil {
+		return err
+	}
+	msg := c.NewMessage(NODE_REPR, c.self.ID, data)
+	for _, target := range targets {
+		err = c.send(msg, target)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -676,7 +738,9 @@ func (c *Cluster) insert(node Node) error {
 		return err
 	}
 	if resp != nil {
-		// TODO: fire leafset update callbacks
+		for _, app := range c.applications {
+			app.OnNewLeaves(c.leafset.list())
+		}
 	}
 	_, err = c.neighborhoodset.insertNode(node)
 	if err != nil {
@@ -705,7 +769,9 @@ func (c *Cluster) remove(id NodeID) error {
 		if err != nil {
 			return err
 		}
-		// TODO: fire leafset update callbacks
+		for _, app := range c.applications {
+			app.OnNewLeaves(c.leafset.list())
+		}
 	}
 	resp, err = c.neighborhoodset.removeNode(id)
 	if err != nil {

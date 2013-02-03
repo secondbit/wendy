@@ -432,6 +432,17 @@ func BenchmarkRoutingTableDump(b *testing.B) {
 	}
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		benchTable.list()
+		benchTable.list([]int{}, []int{})
+	}
+}
+
+func BenchmarkRoutingTableDumpPartial(b *testing.B) {
+	b.StopTimer()
+	if benchTable == nil {
+		initBenchTable(b)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		benchTable.list([]int{0, 1, 2, 3, 4, 5, 6}, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	}
 }
