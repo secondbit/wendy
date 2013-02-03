@@ -24,14 +24,15 @@ func newRoutingTable(self *Node) *routingTable {
 	}
 }
 
-func (t *routingTable) insertNode(node Node) (*Node, error) {
-	return t.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port)
+func (t *routingTable) insertNode(node Node, proximity int64) (*Node, error) {
+	return t.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, proximity)
 }
 
-func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int) (*Node, error) {
+func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int, proximity int64) (*Node, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	node := NewNode(id, localIP, globalIP, region, port)
+	node.setProximity(proximity)
 	row := t.self.ID.CommonPrefixLen(node.ID)
 	if row >= len(t.nodes) {
 		return nil, throwIdentityError("insert", "into", "routing table")
@@ -45,7 +46,11 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 			t.nodes[row][col] = node
 			return node, nil
 		}
-		// TODO: handle conflict
+		// keep the node that has the closest proximity
+		if t.self.Proximity(t.nodes[row][col]) > t.self.Proximity(node) {
+			t.nodes[row][col] = node
+			return node, nil
+		}
 	} else {
 		t.nodes[row][col] = node
 		t.self.incrementRTVersion()

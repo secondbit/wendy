@@ -1,17 +1,16 @@
 package wendy
 
-import (
-	"time"
-)
-
 // Message represents the messages that are sent through the cluster of Nodes
 type Message struct {
 	Purpose     byte
-	Sender      Node      // The Node a message originated at
-	Key         NodeID    // The message's ID
-	Value       []byte    // The message being passed
-	Credentials []byte    // The Credentials used to authenticate the Message
-	Sent        time.Time // The time the message was initially sent
+	Sender      Node   // The Node a message originated at
+	Key         NodeID // The message's ID
+	Value       []byte // The message being passed
+	Credentials []byte // The Credentials used to authenticate the Message
+	LSVersion   uint64 // The version of the leaf set, for join messages
+	RTVersion   uint64 // The version of the routing table, for join messages
+	NSVersion   uint64 // The version of the neighborhood set, for join messages
+	Hop         int    // The number of hops the message has taken
 }
 
 const (
@@ -40,7 +39,10 @@ func (c *Cluster) NewMessage(purpose byte, key NodeID, value []byte) Message {
 		Sender:      *c.self,
 		Key:         key,
 		Value:       value,
-		Sent:        time.Now(),
 		Credentials: credentials,
+		LSVersion:   c.self.leafsetVersion,
+		RTVersion:   c.self.routingTableVersion,
+		NSVersion:   c.self.neighborhoodSetVersion,
+		Hop:         0,
 	}
 }

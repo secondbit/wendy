@@ -1,7 +1,7 @@
 package wendy
 
 import (
-	"encoding/json"
+	"code.google.com/p/vitess/go/bson"
 	"errors"
 	"io"
 	"log"
@@ -186,33 +186,9 @@ func (c *Cluster) Listen() error {
 // Send routes a message through the Cluster.
 func (c *Cluster) Send(msg Message) error {
 	c.debug("Getting target for message %s", msg.Key)
-	target, err := c.leafset.route(msg.Key)
+	target, err := c.Route(msg.Key)
 	if err != nil {
-		if _, ok := err.(IdentityError); ok {
-			c.debug("I'm the target. Delivering message %s", msg.Key)
-			c.deliver(msg)
-			return nil
-		}
-		if err != nodeNotFoundError {
-			return err
-		}
-		if target != nil {
-			c.debug("Target acquired in leafset.")
-		}
-	}
-	if target == nil {
-		c.debug("Target not found in leaf set, checking routing table.")
-		target, err = c.table.route(msg.Key)
-		if err != nil {
-			if _, ok := err.(IdentityError); ok {
-				c.deliver(msg)
-				return nil
-			}
-			if err != nodeNotFoundError {
-				return err
-			}
-		}
-		c.debug("Target acquired in routing table.")
+		return err
 	}
 	if target == nil {
 		c.debug("Couldn't find a target. Delivering message %s", msg.Key)
@@ -229,11 +205,46 @@ func (c *Cluster) Send(msg Message) error {
 	if forward {
 		err = c.send(msg, target)
 		if err == deadNodeError {
-			c.remove(target.ID)
+			err = c.remove(target.ID)
 		}
+		return err
 	}
 	c.debug("Message %s wasn't forwarded because callback terminated it.", msg.Key)
 	return nil
+}
+
+// Route checks the leafSet and routingTable to see if there's an appropriate match for the NodeID. If there is a better match than the current Node, a pointer to that Node is returned. Otherwise, nil is returned (and the message should be delivered).
+func (c *Cluster) Route(key NodeID) (*Node, error) {
+	target, err := c.leafset.route(key)
+	if err != nil {
+		if _, ok := err.(IdentityError); ok {
+			c.debug("I'm the target. Delivering message %s", key)
+			return nil, nil
+		}
+		if err != nodeNotFoundError {
+			return nil, err
+		}
+		if target != nil {
+			c.debug("Target acquired in leafset.")
+			return target, nil
+		}
+	}
+	c.debug("Target not found in leaf set, checking routing table.")
+	target, err = c.table.route(key)
+	if err != nil {
+		if _, ok := err.(IdentityError); ok {
+			c.debug("I'm the target. Delivering message %s", key)
+			return nil, nil
+		}
+		if err != nodeNotFoundError {
+			return nil, err
+		}
+	}
+	if target != nil {
+		c.debug("Target acquired in routing table.")
+		return target, nil
+	}
+	return nil, nil
 }
 
 // Join expresses a Node's desire to join the Cluster, kicking off a process that will populate its child leafSet, neighborhoodSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
@@ -257,11 +268,16 @@ func (c *Cluster) fanOutError(err error) {
 func (c *Cluster) sendHeartbeats() {
 	msg := c.NewMessage(HEARTBEAT, c.self.ID, []byte{})
 	nodes := c.table.list()
+	nodes = append(nodes, c.leafset.list()...)
+	nodes = append(nodes, c.neighborhoodset.list()...)
 	for _, node := range nodes {
 		c.debug("Sending heartbeat to %s", node.ID)
 		err := c.send(msg, node)
 		if err == deadNodeError {
-			c.remove(node.ID)
+			err = c.remove(node.ID)
+			if err != nil {
+				c.fanOutError(err)
+			}
 			continue
 		}
 	}
@@ -280,8 +296,7 @@ func (c *Cluster) deliver(msg Message) {
 func (c *Cluster) handleClient(conn net.Conn) {
 	defer conn.Close()
 	var msg Message
-	decoder := json.NewDecoder(conn)
-	err := decoder.Decode(&msg)
+	err := bson.UnmarshalFromStream(conn, &msg)
 	if err != nil {
 		c.fanOutError(err)
 		return
@@ -298,11 +313,15 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		node, _ := c.table.getNode(msg.Sender.ID)
 		if node != nil {
 			node.updateLastHeardFrom()
-			node.setProximity(time.Since(msg.Sent).Nanoseconds())
 		}
 	}
-	conn.Write([]byte(`{"status": "Received."}`))
+	err = bson.MarshalToStream(conn, true)
+	if err != nil {
+		c.fanOutError(err)
+		return
+	}
 	c.debug("Got message with purpose %v", msg.Purpose)
+	msg.Hop = msg.Hop + 1
 	switch msg.Purpose {
 	case NODE_JOIN:
 		c.onNodeJoin(msg)
@@ -362,8 +381,7 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(time.Duration(c.networkTimeout) * time.Second))
-	encoder := json.NewEncoder(conn)
-	err = encoder.Encode(msg)
+	err = bson.MarshalToStream(conn, msg)
 	if err != nil {
 		return err
 	}
@@ -385,12 +403,26 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 // A node wants to join the cluster. We need to route its message as we normally would, but we should also send it our state tables as appropriate.
 func (c *Cluster) onNodeJoin(msg Message) {
 	c.debug("\033[4;31mNode %s joined!\033[0m", msg.Key)
+	hop := msg.Hop
 	err := c.Send(msg)
 	if err != nil {
 		c.fanOutError(err)
 	}
-	// TODO: only send appropriate state tables
-	err = c.sendStateTables(msg.Sender, rT|lS)
+	// always send routing table
+	tables := rT
+	if hop == 1 {
+		// also send neighborhood set, if I'm the first node to get the message
+		tables = tables | nS
+	}
+	next, err := c.Route(msg.Key)
+	if err != nil {
+		c.fanOutError(err)
+	}
+	if next == nil {
+		// also send leaf set, if I'm the last node to get the message
+		tables = tables | lS
+	}
+	err = c.sendStateTables(msg.Sender, tables)
 	if err != nil {
 		if err != deadNodeError {
 			c.fanOutError(err)
@@ -402,28 +434,46 @@ func (c *Cluster) onNodeJoin(msg Message) {
 func (c *Cluster) onNodeAnnounce(msg Message) {
 	c.debug("\0333[4;31mNode %s announced its presence!\033[0m", msg.Key)
 	// TODO: update state tables with node and state tables
-	// TODO: compare c.self.LeafsetVersion, c.self.RoutingTableVersion, and c.self.NeighborhoodSetVersion against the versions the message uses. If there's a mismatch, send a race condition message with new state tables
+	conflicts := stateMask(0)
+	if c.self.leafsetVersion > msg.LSVersion {
+		conflicts = conflicts | lS
+	}
+	if c.self.routingTableVersion > msg.RTVersion {
+		conflicts = conflicts | rT
+	}
+	if c.self.neighborhoodSetVersion > msg.NSVersion {
+		conflicts = conflicts | nS
+	}
+	if conflicts > 0 {
+		c.debug("Uh oh, %s hit a race condition. Resending state.", msg.Key)
+		err := c.sendRaceNotification(msg.Sender, conflicts)
+		if err != nil {
+			c.fanOutError(err)
+		}
+	}
 }
 
 func (c *Cluster) onNodeExit(node Node) {
 	c.debug("Node %s left. :(", node.ID)
-	c.remove(node.ID)
-}
-
-func (c *Cluster) onStateReceived(msg Message) {
-	// TODO: distinguish between routing table, leaf set, and neighborhood set.
-	var state []Node
-	err := json.Unmarshal(msg.Value, &state)
+	err := c.remove(node.ID)
 	if err != nil {
 		c.fanOutError(err)
 		return
 	}
-	for _, node := range state {
-		c.debug("Inserting %s", node.ID)
-		c.insert(node)
+}
+
+func (c *Cluster) onStateReceived(msg Message) {
+	// TODO: distinguish between routing table, leaf set, and neighborhood set.
+	var state stateTables
+	err := bson.Unmarshal(msg.Value, &state)
+	if err != nil {
+		c.fanOutError(err)
+		return
 	}
-	c.debug("Inserting %s", msg.Sender.ID)
-	c.insert(msg.Sender)
+	// TODO: insert state.RoutingTable into routing table
+	// TODO: insert state.LeafSet into leaf set
+	// TODO: insert state.NeighborhoodSet into neighborhood set
+	// TODO: insert msg.Sender into appropriate tables
 }
 
 func (c *Cluster) onStateRequested(node Node) {
@@ -461,7 +511,7 @@ func (c *Cluster) dumpStateTables(tables stateMask) (stateTables, error) {
 		state.LeafSet = c.leafset.export()
 	}
 	if tables.includeNS() {
-		// TODO: export neighborhood set
+		state.NeighborhoodSet = c.neighborhoodset.export()
 	}
 	return state, nil
 }
@@ -471,11 +521,13 @@ func (c *Cluster) sendStateTables(node Node, tables stateMask) error {
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(state)
+	data, err := bson.Marshal(state)
 	if err != nil {
 		return err
 	}
 	msg := c.NewMessage(STAT_DATA, c.self.ID, data)
+	// TODO: if the Node isn't in the state tables, send to IP instead
+	// TODO: check all state tables, not just the routing table
 	target, err := c.table.getNode(node.ID)
 	if err != nil {
 		if _, ok := err.(IdentityError); !ok && err != nodeNotFoundError {
@@ -486,75 +538,86 @@ func (c *Cluster) sendStateTables(node Node, tables stateMask) error {
 	return c.send(msg, target)
 }
 
-func (c *Cluster) insert(node Node) (leafset, rt *Node) {
-	resp, err := c.table.insertNode(node)
+func (c *Cluster) sendRaceNotification(node Node, tables stateMask) error {
+	state, err := c.dumpStateTables(tables)
 	if err != nil {
-		if _, ok := err.(IdentityError); !ok {
-			c.fanOutError(err)
-		}
+		return err
 	}
-	if resp != nil {
-		c.debug("Inserted node %s into the routing table.", node.ID)
-	}
-	c.debug("Trying to insert %s into the leaf set.", node.ID)
-	resp2, err := c.leafset.insertNode(node)
+	data, err := bson.Marshal(state)
 	if err != nil {
-		if _, ok := err.(IdentityError); !ok {
-			c.fanOutError(err)
+		return err
+	}
+	msg := c.NewMessage(NODE_RACE, c.self.ID, data)
+	// TODO: we're not going to have the Node in our state table... send to its IP instead
+	target, err := c.table.getNode(node.ID)
+	if err != nil {
+		if _, ok := err.(IdentityError); !ok && err != nodeNotFoundError {
+			return err
 		}
 	}
-	c.debug("Finished trying to insert %s into the leaf set.", node.ID)
-	if resp2 != nil {
-		c.debug("Inserted node %s into the leaf set.", node.ID)
-		leaves := c.leafset.list()
-		for _, app := range c.applications {
-			app.OnNewLeaves(leaves)
-		}
-	}
-	if resp != nil || resp2 != nil {
-		for _, app := range c.applications {
-			app.OnNodeJoin(node)
-		}
-	}
-	c.lastStateUpdate = time.Now()
-	return resp, resp2
+	c.debug("Sending state tables to %s", node.ID)
+	return c.send(msg, target)
 }
 
-// BUG(paddy@secondbit.org): If we happen to remove one of our two neighbours in the leaf set, we will wind up with a hole in the leaf set until we next get a state update. The only fix for this that I can think of involves retrieving results by position from the leaf set, and I'm not eager to complicate things with that if I can avoid it.
-func (c *Cluster) remove(id NodeID) {
-	resp, err := c.table.removeNode(id)
-	if err != nil && err != nodeNotFoundError {
-		if _, ok := err.(IdentityError); !ok {
-			c.fanOutError(err)
-		}
+func (c *Cluster) updateProximity(node *Node) error {
+	// TODO: update Node proximity
+	return nil
+}
+
+func (c *Cluster) insert(node Node) error {
+	if node.proximity <= 0 {
+		c.updateProximity(&node)
 	}
-	resp2, err := c.leafset.removeNode(id)
-	if err != nil && err != nodeNotFoundError {
-		if _, ok := err.(IdentityError); !ok {
-			c.fanOutError(err)
-		}
-	}
-	if resp2 != nil {
-		leaves := c.leafset.list()
-		for _, app := range c.applications {
-			app.OnNewLeaves(leaves)
-		}
-		msg := c.NewMessage(NODE_REPR, resp2.ID, []byte{})
-		err = c.Send(msg)
-		if err != nil {
-			c.fanOutError(err)
-		}
+	resp, err := c.table.insertNode(node, c.self.Proximity(&node))
+	if err != nil {
+		return err
 	}
 	if resp != nil {
-		for _, app := range c.applications {
-			app.OnNodeExit(*resp)
-		}
-	} else if resp2 != nil {
-		for _, app := range c.applications {
-			app.OnNodeExit(*resp2)
-		}
+		// TODO: fire table update callbacks
 	}
-	c.lastStateUpdate = time.Now()
+	resp, err = c.leafset.insertNode(node)
+	if err != nil {
+		return err
+	}
+	if resp != nil {
+		// TODO: fire leafset update callbacks
+	}
+	resp, err = c.neighborhoodset.insertNode(node)
+	if err != nil {
+		return err
+	}
+	if resp != nil {
+		// TODO: fire neighborhoodset update callbacks
+	}
+	return nil
+}
+
+func (c *Cluster) remove(id NodeID) error {
+	resp, err := c.table.removeNode(id)
+	if err != nil {
+		return err
+	}
+	if resp != nil {
+		// TODO: kick off table repair if necessary
+		// TODO: fire table update callbacks
+	}
+	resp, err = c.leafset.removeNode(id)
+	if err != nil {
+		return err
+	}
+	if resp != nil {
+		// TODO: kick off leafset repair if necessary
+		// TODO: fire leafset update callbacks
+	}
+	resp, err = c.neighborhoodset.removeNode(id)
+	if err != nil {
+		return err
+	}
+	if resp != nil {
+		// TODO: kick off neighborhoodset repair if necessary
+		// TODO: fire neighborhoodset update callbacks
+	}
+	return nil
 }
 
 func (c *Cluster) debug(format string, v ...interface{}) {

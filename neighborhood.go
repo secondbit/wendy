@@ -57,10 +57,10 @@ func (n *neighborhoodSet) getNode(id NodeID) (*Node, error) {
 	return nil, nodeNotFoundError
 }
 
-func (n *neighborhoodSet) export() [16]Node {
+func (n *neighborhoodSet) export() [32]Node {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	nodes := [16]Node{}
+	nodes := [32]Node{}
 	for i, node := range n.nodes {
 		if node != nil {
 			nodes[i] = *node
