@@ -13,8 +13,8 @@ import (
 
 type StateMask struct {
 	Mask byte
-	Rows  []int
-	Cols  []int
+	Rows []int
+	Cols []int
 }
 
 const (
@@ -415,7 +415,7 @@ func (c *Cluster) onNodeJoin(msg Message) {
 		c.fanOutError(err)
 	}
 	// always send routing table
-	mask := StateMask {
+	mask := StateMask{
 		Mask: rT,
 		Rows: []int{},
 		Cols: []int{},
@@ -460,7 +460,7 @@ func (c *Cluster) onNodeAnnounce(msg Message) {
 	}
 	if conflicts > 0 {
 		c.debug("Uh oh, %s hit a race condition. Resending state.", msg.Key)
-		err := c.sendRaceNotification(msg.Sender, StateMask{Mask:conflicts})
+		err := c.sendRaceNotification(msg.Sender, StateMask{Mask: conflicts})
 		if err != nil {
 			c.fanOutError(err)
 		}
