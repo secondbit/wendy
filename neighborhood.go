@@ -24,19 +24,41 @@ func newNeighborhoodSet(self *Node) *neighborhoodSet {
 	}
 }
 
-func (n *neighborhoodSet) insertNode(node Node) (*Node, error) {
-	return n.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port)
+func (n *neighborhoodSet) insertNode(node Node, proximity int64) (*Node, error) {
+	return n.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, proximity)
 }
 
-func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region string, port int) (*Node, error) {
+func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region string, port int, proximity int64) (*Node, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if id.Equals(n.self.ID) {
 		return nil, throwIdentityError("insert", "into", "neighborhood set")
 	}
-	//node := NewNode(id, localIP, globalIP, region, port)
-	// TODO: insert node
+	insertNode := NewNode(id, localIP, globalIP, region, port)
+	insertNode.setProximity(proximity)
+	newNS := [32]*Node{}
+	newNSpos := 0
+	score := n.self.Proximity(insertNode)
+	inserted := false
+	for _, node := range n.nodes {
+		if newNSpos > 31 {
+			break
+		}
+		if n.self.Proximity(node) > score {
+			newNS[newNSpos] = insertNode
+			newNSpos++
+			inserted = true
+		}
+		if newNSpos <= 31 {
+			newNS[newNSpos] = node
+			newNSpos++
+		}
+	}
+	n.nodes = newNS
 	n.self.incrementNSVersion()
+	if inserted {
+		return insertNode, nil
+	}
 	return nil, nil
 }
 
