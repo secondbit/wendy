@@ -768,6 +768,7 @@ func (c *Cluster) updateProximity(node *Node) error {
 		if err != nil {
 			return err
 		}
+		c.cacheProximity(node.ID, node.getRawProximity())
 	}
 	return nil
 }
@@ -811,11 +812,11 @@ func (c *Cluster) insert(node Node, tables StateMask) error {
 	if node.IsZero() {
 		return nil
 	}
-	if node.proximity <= 0 && (tables.includeNS() || tables.includeRT()) {
+	if node.getRawProximity() <= 0 && (tables.includeNS() || tables.includeRT()) {
 		c.updateProximity(&node)
 	}
 	if tables.includeRT() {
-		_, err := c.table.insertNode(node, node.proximity)
+		_, err := c.table.insertNode(node, node.getRawProximity())
 		if err != nil {
 			return err
 		}
@@ -830,7 +831,7 @@ func (c *Cluster) insert(node Node, tables StateMask) error {
 		}
 	}
 	if tables.includeNS() {
-		_, err := c.neighborhoodset.insertNode(node, node.proximity)
+		_, err := c.neighborhoodset.insertNode(node, node.getRawProximity())
 		if err != nil {
 			return err
 		}

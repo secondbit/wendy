@@ -14,11 +14,11 @@ type Node struct {
 	Region                 string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
 	ID                     NodeID
 	proximity              int64
-	mutex                  *sync.Mutex // lock and unlock a Node for concurrency safety
-	lastHeardFrom          time.Time   // The last time we heard from this node
-	leafsetVersion         uint64      // the version number of the leafset
-	routingTableVersion    uint64      // the version number of the routing table
-	neighborhoodSetVersion uint64      // the version number of the neighborhood set
+	mutex                  *sync.RWMutex // lock and unlock a Node for concurrency safety
+	lastHeardFrom          time.Time     // The last time we heard from this node
+	leafsetVersion         uint64        // the version number of the leafset
+	routingTableVersion    uint64        // the version number of the routing table
+	neighborhoodSetVersion uint64        // the version number of the neighborhood set
 }
 
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
@@ -30,7 +30,7 @@ func NewNode(id NodeID, local, global, region string, port int) *Node {
 		Port:                   port,
 		Region:                 region,
 		proximity:              -1,
-		mutex:                  new(sync.Mutex),
+		mutex:                  new(sync.RWMutex),
 		lastHeardFrom:          time.Now(),
 		leafsetVersion:         0,
 		routingTableVersion:    0,
@@ -48,14 +48,20 @@ func (self *Node) Proximity(n *Node) int64 {
 	if n == nil {
 		return -1
 	}
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
+	n.mutex.RLock()
+	defer n.mutex.RUnlock()
 	multiplier := int64(1)
 	if n.Region != self.Region {
 		multiplier = 5
 	}
 	score := n.proximity * multiplier
 	return score
+}
+
+func (self *Node) getRawProximity() int64 {
+	self.mutex.RLock()
+	defer self.mutex.RUnlock()
+	return self.proximity
 }
 
 func (self *Node) setProximity(proximity int64) {
@@ -71,8 +77,8 @@ func (self *Node) updateLastHeardFrom() {
 }
 
 func (self *Node) LastHeardFrom() time.Time {
-	self.mutex.Lock()
-	self.mutex.Unlock()
+	self.mutex.RLock()
+	defer self.mutex.RUnlock()
 	return self.lastHeardFrom
 }
 
