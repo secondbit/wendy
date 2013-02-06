@@ -1,7 +1,7 @@
 package wendy
 
 import (
-	"code.google.com/p/vitess/go/bson"
+	"encoding/json"
 	"errors"
 	"io"
 	"log"
@@ -26,21 +26,22 @@ const (
 )
 
 func (m StateMask) includeRT() bool {
-	return m.Mask == (m.Mask & rT)
+	return m.Mask == (m.Mask | rT)
 }
 
 func (m StateMask) includeLS() bool {
-	return m.Mask == (m.Mask & lS)
+	return m.Mask == (m.Mask | lS)
 }
 
 func (m StateMask) includeNS() bool {
-	return m.Mask == (m.Mask & nS)
+	return m.Mask == (m.Mask | nS)
 }
 
 type stateTables struct {
-	RoutingTable    [32][16]Node
-	LeafSet         [2][]Node
-	NeighborhoodSet [32]Node
+	RoutingTable    *[32][16]*Node `json:"rt,omitempty"`
+	LeafSet         *[2][16]*Node  `json:"ls,omitempty"`
+	NeighborhoodSet *[32]*Node     `json:"ns,omitempty"`
+	EOL             bool           `json:"eol,omitempty"`
 }
 
 // Cluster holds the information about the state of the network. It is the main interface to the distributed network of Nodes.
@@ -115,6 +116,12 @@ func (c *Cluster) clearProximityCache() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.proximityCache = map[NodeID]int64{}
+}
+
+func (c *Cluster) isJoined() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.joined
 }
 
 // ID returns an identifier for the Cluster. It uses the ID of the current Node.
@@ -265,7 +272,9 @@ func (c *Cluster) Send(msg Message) error {
 	}
 	if target == nil {
 		c.debug("Couldn't find a target. Delivering message %s", msg.Key)
-		c.deliver(msg)
+		if msg.Purpose > NODE_ANN {
+			c.deliver(msg)
+		}
 		return nil
 	}
 	forward := c.forward(msg, target.ID)
@@ -285,22 +294,18 @@ func (c *Cluster) Route(key NodeID) (*Node, error) {
 	target, err := c.leafset.route(key)
 	if err != nil {
 		if _, ok := err.(IdentityError); ok {
-			c.debug("I'm the target. Delivering message %s", key)
 			return nil, nil
 		}
 		if err != nodeNotFoundError {
 			return nil, err
 		}
 		if target != nil {
-			c.debug("Target acquired in leafset.")
 			return target, nil
 		}
 	}
-	c.debug("Target not found in leaf set, checking routing table.")
 	target, err = c.table.route(key)
 	if err != nil {
 		if _, ok := err.(IdentityError); ok {
-			c.debug("I'm the target. Delivering message %s", key)
 			return nil, nil
 		}
 		if err != nodeNotFoundError {
@@ -308,7 +313,6 @@ func (c *Cluster) Route(key NodeID) (*Node, error) {
 		}
 	}
 	if target != nil {
-		c.debug("Target acquired in routing table.")
 		return target, nil
 	}
 	return nil, nil
@@ -339,7 +343,14 @@ func (c *Cluster) sendHeartbeats() {
 	nodes := c.table.list([]int{}, []int{})
 	nodes = append(nodes, c.leafset.list()...)
 	nodes = append(nodes, c.neighborhoodset.list()...)
+	sent := map[NodeID]bool{}
 	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		if _, set := sent[node.ID]; set {
+			continue
+		}
 		c.debug("Sending heartbeat to %s", node.ID)
 		err := c.send(msg, node)
 		if err == deadNodeError {
@@ -349,11 +360,12 @@ func (c *Cluster) sendHeartbeats() {
 			}
 			continue
 		}
+		sent[node.ID] = true
 	}
 }
 
 func (c *Cluster) deliver(msg Message) {
-	if msg.Purpose == NODE_JOIN || msg.Purpose == NODE_EXIT || msg.Purpose == HEARTBEAT || msg.Purpose == STAT_DATA || msg.Purpose == STAT_REQ || msg.Purpose == NODE_RACE || msg.Purpose == NODE_REPR {
+	if msg.Purpose <= NODE_ANN {
 		c.warn("Received utility message %s to the deliver function. Purpose was %d.", msg.Key, msg.Purpose)
 		return
 	}
@@ -367,7 +379,8 @@ func (c *Cluster) deliver(msg Message) {
 func (c *Cluster) handleClient(conn net.Conn) {
 	defer conn.Close()
 	var msg Message
-	err := bson.UnmarshalFromStream(conn, &msg)
+	decoder := json.NewDecoder(conn)
+	err := decoder.Decode(&msg)
 	if err != nil {
 		c.fanOutError(err)
 		return
@@ -381,16 +394,12 @@ func (c *Cluster) handleClient(conn net.Conn) {
 		return
 	}
 	if msg.Purpose != NODE_JOIN {
-		node, _ := c.table.getNode(msg.Sender.ID)
+		node, _ := c.get(msg.Sender.ID)
 		if node != nil {
 			node.updateLastHeardFrom()
 		}
 	}
-	err = bson.MarshalToStream(conn, true)
-	if err != nil {
-		c.fanOutError(err)
-		return
-	}
+	conn.Write([]byte(`{"status": "Received."}`))
 	c.debug("Got message with purpose %v", msg.Purpose)
 	msg.Hop = msg.Hop + 1
 	switch msg.Purpose {
@@ -428,8 +437,11 @@ func (c *Cluster) handleClient(conn net.Conn) {
 }
 
 func (c *Cluster) send(msg Message, destination *Node) error {
-	if c.self == nil || destination == nil {
-		return errors.New("Can't send to or from a nil node.")
+	if destination == nil {
+		return errors.New("Can't send to a nil node.")
+	}
+	if c.self == nil {
+		return errors.New("Can't send from a nil node.")
 	}
 	var address string
 	if destination.Region == c.self.Region {
@@ -457,7 +469,8 @@ func (c *Cluster) sendToIP(msg Message, address string) error {
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(time.Duration(c.getNetworkTimeout()) * time.Second))
-	err = bson.MarshalToStream(conn, msg)
+	encoder := json.NewEncoder(conn)
+	err = encoder.Encode(msg)
 	if err != nil {
 		return err
 	}
@@ -503,11 +516,13 @@ func (c *Cluster) onNodeJoin(msg Message) {
 	if err != nil {
 		c.fanOutError(err)
 	}
+	eol := false
 	if next == nil {
 		// also send leaf set, if I'm the last node to get the message
 		mask.Mask = mask.Mask | lS
+		eol = true
 	}
-	err = c.sendStateTables(msg.Sender, mask)
+	err = c.sendStateTables(msg.Sender, mask, eol)
 	if err != nil {
 		if err != deadNodeError {
 			c.fanOutError(err)
@@ -529,12 +544,15 @@ func (c *Cluster) onNodeAnnounce(msg Message) {
 	}
 	conflicts := byte(0)
 	if c.self.leafsetVersion > msg.LSVersion {
+		c.debug("Expected LSVersion %d, got %d", c.self.leafsetVersion, msg.LSVersion)
 		conflicts = conflicts | lS
 	}
 	if c.self.routingTableVersion > msg.RTVersion {
+		c.debug("Expected RTVersion %d, got %d", c.self.routingTableVersion, msg.RTVersion)
 		conflicts = conflicts | rT
 	}
 	if c.self.neighborhoodSetVersion > msg.NSVersion {
+		c.debug("Expected NSVersion %d, got %d", c.self.neighborhoodSetVersion, msg.NSVersion)
 		conflicts = conflicts | nS
 	}
 	if conflicts > 0 {
@@ -560,24 +578,35 @@ func (c *Cluster) onStateReceived(msg Message) {
 	if err != nil {
 		c.fanOutError(err)
 	}
-	if !c.joined {
+	var state stateTables
+	err = json.Unmarshal(msg.Value, &state)
+	if err != nil {
+		c.fanOutError(err)
+		return
+	}
+	if !c.isJoined() && state.EOL {
+		c.debug("Haven't announced presence yet... waiting %d seconds", (2 * c.getNetworkTimeout()))
 		time.Sleep(time.Duration(2*c.getNetworkTimeout()) * time.Second)
 		err = c.announcePresence()
 		if err != nil {
 			c.fanOutError(err)
 		}
+	} else if !state.EOL {
+		c.debug("Already announced presence.")
+	} else {
+		c.debug("Not end of line.")
 	}
 }
 
 func (c *Cluster) onStateRequested(msg Message) {
 	c.debug("%s wants to know about my state tables!", msg.Sender.ID)
 	var mask StateMask
-	err := bson.Unmarshal(msg.Value, &mask)
+	err := json.Unmarshal(msg.Value, &mask)
 	if err != nil {
 		c.fanOutError(err)
 		return
 	}
-	c.sendStateTables(msg.Sender, mask)
+	c.sendStateTables(msg.Sender, mask, false)
 }
 
 func (c *Cluster) onRaceCondition(msg Message) {
@@ -595,12 +624,12 @@ func (c *Cluster) onRaceCondition(msg Message) {
 func (c *Cluster) onRepairRequest(msg Message) {
 	c.debug("Helping to repair %s", msg.Sender.ID)
 	var mask StateMask
-	err := bson.Unmarshal(msg.Value, &mask)
+	err := json.Unmarshal(msg.Value, &mask)
 	if err != nil {
 		c.fanOutError(err)
 		return
 	}
-	c.sendStateTables(msg.Sender, mask)
+	c.sendStateTables(msg.Sender, mask, false)
 }
 
 func (c *Cluster) onMessageReceived(msg Message) {
@@ -614,23 +643,27 @@ func (c *Cluster) onMessageReceived(msg Message) {
 func (c *Cluster) dumpStateTables(tables StateMask) (stateTables, error) {
 	var state stateTables
 	if tables.includeRT() {
-		state.RoutingTable = c.table.export(tables.Rows, tables.Cols)
+		routingTable := c.table.export(tables.Rows, tables.Cols)
+		state.RoutingTable = &routingTable
 	}
 	if tables.includeLS() {
-		state.LeafSet = c.leafset.export()
+		leafSet := c.leafset.export()
+		state.LeafSet = &leafSet
 	}
 	if tables.includeNS() {
-		state.NeighborhoodSet = c.neighborhoodset.export()
+		neighborhoodSet := c.neighborhoodset.export()
+		state.NeighborhoodSet = &neighborhoodSet
 	}
 	return state, nil
 }
 
-func (c *Cluster) sendStateTables(node Node, tables StateMask) error {
+func (c *Cluster) sendStateTables(node Node, tables StateMask, eol bool) error {
 	state, err := c.dumpStateTables(tables)
 	if err != nil {
 		return err
 	}
-	data, err := bson.Marshal(state)
+	state.EOL = eol
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -652,7 +685,7 @@ func (c *Cluster) sendRaceNotification(node Node, tables StateMask) error {
 	if err != nil {
 		return err
 	}
-	data, err := bson.Marshal(state)
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -670,11 +703,12 @@ func (c *Cluster) sendRaceNotification(node Node, tables StateMask) error {
 }
 
 func (c *Cluster) announcePresence() error {
+	c.debug("Announcing presence...")
 	state, err := c.dumpStateTables(StateMask{Mask: all})
 	if err != nil {
 		return err
 	}
-	data, err := bson.Marshal(state)
+	data, err := json.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -682,8 +716,16 @@ func (c *Cluster) announcePresence() error {
 	nodes := c.table.list([]int{}, []int{})
 	nodes = append(nodes, c.leafset.list()...)
 	nodes = append(nodes, c.neighborhoodset.list()...)
+	sent := map[NodeID]bool{}
 	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		if _, set := sent[node.ID]; set {
+			continue
+		}
 		c.debug("Announcing presence to %s", node.ID)
+		c.debug("Node: %s\trt: %d\tls: %d\tns: %d", node.ID.String(), node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion)
 		msg.LSVersion = node.leafsetVersion
 		msg.RTVersion = node.routingTableVersion
 		msg.NSVersion = node.neighborhoodSetVersion
@@ -695,6 +737,7 @@ func (c *Cluster) announcePresence() error {
 			}
 			continue
 		}
+		sent[node.ID] = true
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -712,7 +755,7 @@ func (c *Cluster) repairLeafset(id NodeID) error {
 		}
 	}
 	mask := StateMask{Mask: lS}
-	data, err := bson.Marshal(mask)
+	data, err := json.Marshal(mask)
 	if err != nil {
 		return err
 	}
@@ -732,7 +775,7 @@ func (c *Cluster) repairTable(id NodeID) error {
 		}
 	}
 	mask := StateMask{Mask: rT, Rows: []int{reqRow}, Cols: []int{col}}
-	data, err := bson.Marshal(mask)
+	data, err := json.Marshal(mask)
 	if err != nil {
 		return err
 	}
@@ -749,7 +792,7 @@ func (c *Cluster) repairTable(id NodeID) error {
 func (c *Cluster) repairNeighborhood() error {
 	targets := c.neighborhoodset.list()
 	mask := StateMask{Mask: nS}
-	data, err := bson.Marshal(mask)
+	data, err := json.Marshal(mask)
 	if err != nil {
 		return err
 	}
@@ -779,33 +822,50 @@ func (c *Cluster) updateProximity(node *Node) error {
 
 func (c *Cluster) insertMessage(msg Message) error {
 	var state stateTables
-	err := bson.Unmarshal(msg.Value, &state)
+	err := json.Unmarshal(msg.Value, &state)
 	if err != nil {
 		return err
 	}
-	err = c.insert(msg.Sender, StateMask{Mask: all})
+	sender := &msg.Sender
+	sender.updateVersions(msg.RTVersion, msg.LSVersion, msg.NSVersion)
+	err = c.insert(*sender, StateMask{Mask: all})
 	if err != nil {
 		return err
 	}
-	for _, node := range state.NeighborhoodSet {
-		err = c.insert(node, StateMask{Mask: nS})
-		if err != nil {
-			return err
-		}
-	}
-	for _, side := range state.LeafSet {
-		for _, node := range side {
-			err = c.insert(node, StateMask{Mask: lS | nS})
+	if state.NeighborhoodSet != nil {
+		for _, node := range state.NeighborhoodSet {
+			if node == nil {
+				continue
+			}
+			err = c.insert(*node, StateMask{Mask: nS})
 			if err != nil {
 				return err
 			}
 		}
 	}
-	for _, row := range state.RoutingTable {
-		for _, node := range row {
-			err = c.insert(node, StateMask{Mask: rT | nS})
-			if err != nil {
-				return err
+	if state.LeafSet != nil {
+		for _, side := range state.LeafSet {
+			for _, node := range side {
+				if node == nil {
+					continue
+				}
+				err = c.insert(*node, StateMask{Mask: lS | nS})
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	if state.RoutingTable != nil {
+		for _, row := range state.RoutingTable {
+			for _, node := range row {
+				if node == nil {
+					continue
+				}
+				err = c.insert(*node, StateMask{Mask: rT | nS})
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -816,28 +876,52 @@ func (c *Cluster) insert(node Node, tables StateMask) error {
 	if node.IsZero() {
 		return nil
 	}
+	if node.ID.Equals(c.self.ID) {
+		c.debug("Skipping inserting myself.")
+		return nil
+	}
+	c.debug("Inserting node %s", node.ID)
 	if node.getRawProximity() <= 0 && (tables.includeNS() || tables.includeRT()) {
 		c.updateProximity(&node)
 	}
 	if tables.includeRT() {
-		_, err := c.table.insertNode(node, node.getRawProximity())
-		if err != nil {
+		c.debug("Inserting node %s in routing table.", node.ID)
+		resp, err := c.table.insertNode(node, node.getRawProximity())
+		if err != nil && err != rtDuplicateInsertError {
 			return err
+		}
+		if resp != nil && err != rtDuplicateInsertError {
+			c.debug("Inserted node %s in routing table.", resp.ID)
+		}
+		if err == rtDuplicateInsertError {
+			c.debug(err.Error())
 		}
 	}
 	if tables.includeLS() {
+		c.debug("Inserting node %s in leaf set.", node.ID)
 		resp, err := c.leafset.insertNode(node)
-		if err != nil {
+		if err != nil && err != lsDuplicateInsertError {
 			return err
 		}
-		if resp != nil {
+		if resp != nil && err != lsDuplicateInsertError {
 			c.newLeaves(c.leafset.list())
+			c.debug("Inserted node %s in leaf set.", resp.ID)
+		}
+		if err == lsDuplicateInsertError {
+			c.debug(err.Error())
 		}
 	}
 	if tables.includeNS() {
-		_, err := c.neighborhoodset.insertNode(node, node.getRawProximity())
-		if err != nil {
+		c.debug("Inserting node %s in neighborhood set.", node.ID)
+		resp, err := c.neighborhoodset.insertNode(node, node.getRawProximity())
+		if err != nil && err != nsDuplicateInsertError {
 			return err
+		}
+		if resp != nil && err != nsDuplicateInsertError {
+			c.debug("Inserted node %s in neighborhood set.", resp.ID)
+		}
+		if err == nsDuplicateInsertError {
+			c.debug(err.Error())
 		}
 	}
 	return nil

@@ -1,6 +1,7 @@
 package wendy
 
 import (
+	"errors"
 	"log"
 	"os"
 	"sync"
@@ -24,30 +25,47 @@ func newNeighborhoodSet(self *Node) *neighborhoodSet {
 	}
 }
 
+var nsDuplicateInsertError = errors.New("Node already exists in neighborhood set.")
+
 func (n *neighborhoodSet) insertNode(node Node, proximity int64) (*Node, error) {
-	return n.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, proximity)
+	return n.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
 }
 
-func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region string, port int, proximity int64) (*Node, error) {
+func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region string, port int, rTVersion, lSVersion, nSVersion uint64, proximity int64) (*Node, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if id.Equals(n.self.ID) {
 		return nil, throwIdentityError("insert", "into", "neighborhood set")
 	}
 	insertNode := NewNode(id, localIP, globalIP, region, port)
+	insertNode.updateVersions(rTVersion, lSVersion, nSVersion)
 	insertNode.setProximity(proximity)
 	newNS := [32]*Node{}
 	newNSpos := 0
 	score := n.self.Proximity(insertNode)
 	inserted := false
+	dup := false
 	for _, node := range n.nodes {
 		if newNSpos > 31 {
 			break
 		}
-		if n.self.Proximity(node) > score {
+		if node == nil && !inserted && !dup {
 			newNS[newNSpos] = insertNode
 			newNSpos++
 			inserted = true
+			continue
+		}
+		if node != nil && insertNode.ID.Equals(node.ID) {
+			newNS[newNSpos] = insertNode
+			newNSpos++
+			dup = true
+			continue
+		}
+		if node != nil && n.self.Proximity(node) > score && !inserted && !dup {
+			newNS[newNSpos] = insertNode
+			newNSpos++
+			inserted = true
+			continue
 		}
 		if newNSpos <= 31 {
 			newNS[newNSpos] = node
@@ -55,8 +73,11 @@ func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region stri
 		}
 	}
 	n.nodes = newNS
-	n.self.incrementNSVersion()
+	if dup {
+		return nil, nsDuplicateInsertError
+	}
 	if inserted {
+		n.self.incrementNSVersion()
 		return insertNode, nil
 	}
 	return nil, nil
@@ -79,16 +100,10 @@ func (n *neighborhoodSet) getNode(id NodeID) (*Node, error) {
 	return nil, nodeNotFoundError
 }
 
-func (n *neighborhoodSet) export() [32]Node {
+func (n *neighborhoodSet) export() [32]*Node {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	nodes := [32]Node{}
-	for i, node := range n.nodes {
-		if node != nil {
-			nodes[i] = *node
-		}
-	}
-	return nodes
+	return n.nodes
 }
 
 func (n *neighborhoodSet) list() []*Node {

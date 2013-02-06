@@ -1,6 +1,7 @@
 package wendy
 
 import (
+	"errors"
 	"log"
 	"os"
 	"sync"
@@ -24,14 +25,17 @@ func newRoutingTable(self *Node) *routingTable {
 	}
 }
 
+var rtDuplicateInsertError = errors.New("Node already exists in routing table.")
+
 func (t *routingTable) insertNode(node Node, proximity int64) (*Node, error) {
-	return t.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, proximity)
+	return t.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
 }
 
-func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int, proximity int64) (*Node, error) {
+func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int, rtVersion, lsVersion, nsVersion uint64, proximity int64) (*Node, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	node := NewNode(id, localIP, globalIP, region, port)
+	node.updateVersions(rtVersion, lsVersion, nsVersion)
 	node.setProximity(proximity)
 	row := t.self.ID.CommonPrefixLen(node.ID)
 	if row >= len(t.nodes) {
@@ -44,7 +48,7 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 	if t.nodes[row][col] != nil {
 		if node.ID.Equals(t.nodes[row][col].ID) {
 			t.nodes[row][col] = node
-			return node, nil
+			return nil, rtDuplicateInsertError
 		}
 		// keep the node that has the closest proximity
 		if t.self.Proximity(t.nodes[row][col]) > t.self.Proximity(node) {
@@ -162,22 +166,22 @@ func (t *routingTable) list(rows, cols []int) []*Node {
 	return nodes
 }
 
-func (t *routingTable) export(rows, cols []int) [32][16]Node {
+func (t *routingTable) export(rows, cols []int) [32][16]*Node {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	nodes := [32][16]Node{}
+	nodes := [32][16]*Node{}
 	if len(rows) > 0 {
 		for _, row := range rows {
 			if len(cols) > 0 {
 				for _, col := range cols {
 					if t.nodes[row][col] != nil {
-						nodes[row][col] = *(t.nodes[row][col])
+						nodes[row][col] = t.nodes[row][col]
 					}
 				}
 			} else {
 				for col, node := range t.nodes[row] {
 					if node != nil {
-						nodes[row][col] = *node
+						nodes[row][col] = node
 					}
 				}
 			}
@@ -186,7 +190,7 @@ func (t *routingTable) export(rows, cols []int) [32][16]Node {
 		for rowNo, row := range t.nodes {
 			for colNo, node := range row {
 				if node != nil {
-					nodes[rowNo][colNo] = *node
+					nodes[rowNo][colNo] = node
 				}
 			}
 		}

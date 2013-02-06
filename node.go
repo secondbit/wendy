@@ -48,6 +48,9 @@ func (self *Node) Proximity(n *Node) int64 {
 	if n == nil {
 		return -1
 	}
+	if self.mutex == nil {
+		self.mutex = new(sync.RWMutex)
+	}
 	n.mutex.RLock()
 	defer n.mutex.RUnlock()
 	multiplier := int64(1)
@@ -59,24 +62,36 @@ func (self *Node) Proximity(n *Node) int64 {
 }
 
 func (self *Node) getRawProximity() int64 {
+	if self.mutex == nil {
+		self.mutex = new(sync.RWMutex)
+	}
 	self.mutex.RLock()
 	defer self.mutex.RUnlock()
 	return self.proximity
 }
 
 func (self *Node) setProximity(proximity int64) {
+	if self.mutex == nil {
+		self.mutex = new(sync.RWMutex)
+	}
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 	self.proximity = proximity
 }
 
 func (self *Node) updateLastHeardFrom() {
+	if self.mutex == nil {
+		self.mutex = new(sync.RWMutex)
+	}
 	self.mutex.Lock()
 	defer self.mutex.Unlock()
 	self.lastHeardFrom = time.Now()
 }
 
 func (self *Node) LastHeardFrom() time.Time {
+	if self.mutex == nil {
+		self.mutex = new(sync.RWMutex)
+	}
 	self.mutex.RLock()
 	defer self.mutex.RUnlock()
 	return self.lastHeardFrom
@@ -92,4 +107,16 @@ func (self *Node) incrementRTVersion() {
 
 func (self *Node) incrementNSVersion() {
 	atomic.AddUint64(&self.neighborhoodSetVersion, 1)
+}
+
+func (self *Node) updateVersions(RTVersion, LSVersion, NSVersion uint64) {
+	for self.routingTableVersion < RTVersion {
+		atomic.AddUint64(&self.routingTableVersion, 1)
+	}
+	for self.leafsetVersion < LSVersion {
+		atomic.AddUint64(&self.leafsetVersion, 1)
+	}
+	for self.neighborhoodSetVersion < NSVersion {
+		atomic.AddUint64(&self.neighborhoodSetVersion, 1)
+	}
 }

@@ -1,6 +1,7 @@
 package wendy
 
 import (
+	"errors"
 	"log"
 	"os"
 	"sync"
@@ -26,28 +27,35 @@ func newLeafSet(self *Node) *leafSet {
 	}
 }
 
+var lsDuplicateInsertError = errors.New("Node already exists in leaf set.")
+
 func (l *leafSet) insertNode(node Node) (*Node, error) {
-	return l.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port)
+	return l.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion)
 }
 
-func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port int) (*Node, error) {
+func (l *leafSet) insertValues(id NodeID, localIP, globalIP, region string, port int, rTVersion, lSVersion, nSVersion uint64) (*Node, error) {
 	l.lock.Lock()
 	defer l.lock.Unlock()
 	node := NewNode(id, localIP, globalIP, region, port)
+	node.updateVersions(rTVersion, lSVersion, nSVersion)
 	side := l.self.ID.RelPos(node.ID)
-	var inserted bool
+	var inserted, contained bool
 	if side == -1 {
-		l.left, inserted = node.insertIntoArray(l.left, l.self)
-		if !inserted {
+		l.left, contained, inserted = node.insertIntoArray(l.left, l.self)
+		if !contained {
 			return nil, nil
+		} else if !inserted {
+			return nil, lsDuplicateInsertError
 		} else {
 			l.self.incrementLSVersion()
 			return node, nil
 		}
 	} else if side == 1 {
-		l.right, inserted = node.insertIntoArray(l.right, l.self)
-		if !inserted {
+		l.right, contained, inserted = node.insertIntoArray(l.right, l.self)
+		if !contained {
 			return nil, nil
+		} else if !inserted {
+			return nil, lsDuplicateInsertError
 		} else {
 			l.self.incrementLSVersion()
 			return node, nil
@@ -170,23 +178,10 @@ func (l *leafSet) route(key NodeID) (*Node, error) {
 	return nil, nodeNotFoundError
 }
 
-func (l *leafSet) export() [2][]Node {
+func (l *leafSet) export() [2][16]*Node {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	nodes := [2][]Node{}
-	nodes[0] = []Node{}
-	nodes[1] = []Node{}
-	for _, node := range l.left {
-		if node != nil {
-			nodes[0] = append(nodes[0], *node)
-		}
-	}
-	for _, node := range l.right {
-		if node != nil {
-			nodes[1] = append(nodes[1], *node)
-		}
-	}
-	return nodes
+	return [2][16]*Node{l.left, l.right}
 }
 
 func (l *leafSet) list() []*Node {
@@ -206,17 +201,19 @@ func (l *leafSet) list() []*Node {
 	return nodes
 }
 
-func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, bool) {
+func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, bool, bool) {
 	var result [16]*Node
 	result_index := 0
 	src_index := 0
 	pos := -1
+	inserted := false
 	for result_index < len(result) {
 		result[result_index] = array[src_index]
 		if array[src_index] == nil {
 			if pos < 0 {
 				result[result_index] = node
 				pos = result_index
+				inserted = true
 			}
 			break
 		}
@@ -229,12 +226,13 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, boo
 		if center.ID.Diff(node.ID).Cmp(center.ID.Diff(result[result_index].ID)) < 0 && pos < 0 {
 			result[result_index] = node
 			pos = result_index
+			inserted = true
 		} else {
 			src_index += 1
 		}
 		result_index += 1
 	}
-	return result, pos > -1
+	return result, pos > -1, inserted
 }
 
 func (l *leafSet) removeNode(id NodeID) (*Node, error) {
