@@ -538,10 +538,6 @@ func (c *Cluster) onNodeJoin(msg Message) {
 // A node has joined the cluster. We need to decide if it belongs in our state tables and if the nodes in the state tables it sends us belong in our state tables. If the version of our state tables it sends to us doesn't match our local version, we need to resend our state tables to prevent a race condition.
 func (c *Cluster) onNodeAnnounce(msg Message) {
 	c.debug("\0333[4;31mNode %s announced its presence!\033[0m", msg.Key)
-	err := c.insertMessage(msg)
-	if err != nil {
-		c.fanOutError(err)
-	}
 	conflicts := byte(0)
 	if c.self.leafsetVersion > msg.LSVersion {
 		c.debug("Expected LSVersion %d, got %d", c.self.leafsetVersion, msg.LSVersion)
@@ -561,6 +557,10 @@ func (c *Cluster) onNodeAnnounce(msg Message) {
 		if err != nil {
 			c.fanOutError(err)
 		}
+	}
+	err := c.insertMessage(msg)
+	if err != nil {
+		c.fanOutError(err)
 	}
 }
 
