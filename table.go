@@ -47,6 +47,7 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 	}
 	if t.nodes[row][col] != nil {
 		if node.ID.Equals(t.nodes[row][col].ID) {
+			node.updateVersions(t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
 			t.nodes[row][col] = node
 			return nil, rtDuplicateInsertError
 		}

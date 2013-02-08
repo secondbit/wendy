@@ -56,6 +56,7 @@ func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region stri
 			continue
 		}
 		if node != nil && insertNode.ID.Equals(node.ID) {
+			insertNode.updateVersions(node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion)
 			newNS[newNSpos] = insertNode
 			newNSpos++
 			dup = true

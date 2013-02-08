@@ -218,6 +218,7 @@ func (node *Node) insertIntoArray(array [16]*Node, center *Node) ([16]*Node, boo
 			break
 		}
 		if node.ID.Equals(array[src_index].ID) {
+			node.updateVersions(array[src_index].routingTableVersion, array[src_index].leafsetVersion, array[src_index].neighborhoodSetVersion)
 			pos = result_index
 			result_index += 1
 			src_index += 1
