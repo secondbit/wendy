@@ -446,3 +446,25 @@ func BenchmarkRoutingTableDumpPartial(b *testing.B) {
 		benchTable.list([]int{0, 1, 2, 3, 4, 5, 6}, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
 	}
 }
+
+func BenchmarkRoutingTableExport(b *testing.B) {
+	b.StopTimer()
+	if benchTable == nil {
+		initBenchTable(b)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		benchTable.export([]int{}, []int{})
+	}
+}
+
+func BenchmarkRoutingTableExportPartial(b *testing.B) {
+	b.StopTimer()
+	if benchTable == nil {
+		initBenchTable(b)
+	}
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		benchTable.export([]int{0, 1, 2, 3, 4, 5, 6}, []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
+	}
+}

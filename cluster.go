@@ -88,6 +88,9 @@ func (c *Cluster) forward(msg Message, id NodeID) bool {
 func (c *Cluster) marshalCredentials() []byte {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
+	if c.credentials == nil {
+		return []byte{}
+	}
 	return c.credentials.Marshal()
 }
 
@@ -132,6 +135,11 @@ func (c *Cluster) ID() NodeID {
 // String returns a string representation of the Cluster, in the form of its ID.
 func (c *Cluster) String() string {
 	return c.ID().String()
+}
+
+// GetIP returns the IP address to use when communicating with a Node.
+func (c *Cluster) GetIP(node Node) string {
+	return c.self.GetIP(node)
 }
 
 // SetLogger sets the log.Logger that the Cluster, along with its child routingTable and leafSet, will write to.
@@ -303,6 +311,7 @@ func (c *Cluster) Route(key NodeID) (*Node, error) {
 			return target, nil
 		}
 	}
+	c.debug("Target not found in leafset, checking routing table.")
 	target, err = c.table.route(key)
 	if err != nil {
 		if _, ok := err.(IdentityError); ok {
@@ -326,7 +335,7 @@ func (c *Cluster) Join(ip string, port int) error {
 	c.debug("Sending join message to %s:%d", ip, port)
 	msg := c.NewMessage(NODE_JOIN, c.self.ID, credentials)
 	address := ip + ":" + strconv.Itoa(port)
-	return c.sendToIP(msg, address)
+	return c.SendToIP(msg, address)
 }
 
 func (c *Cluster) fanOutError(err error) {
@@ -443,15 +452,10 @@ func (c *Cluster) send(msg Message, destination *Node) error {
 	if c.self == nil {
 		return errors.New("Can't send from a nil node.")
 	}
-	var address string
-	if destination.Region == c.self.Region {
-		address = destination.LocalIP + ":" + strconv.Itoa(destination.Port)
-	} else {
-		address = destination.GlobalIP + ":" + strconv.Itoa(destination.Port)
-	}
+	address := c.GetIP(*destination)
 	c.debug("Sending message %s to %s", msg.Key, address)
 	start := time.Now()
-	err := c.sendToIP(msg, address)
+	err := c.SendToIP(msg, address)
 	if err == nil {
 		proximity := time.Since(start)
 		destination.setProximity(int64(proximity))
@@ -460,7 +464,8 @@ func (c *Cluster) send(msg Message, destination *Node) error {
 	return err
 }
 
-func (c *Cluster) sendToIP(msg Message, address string) error {
+// SendToIP sends a message directly to an IP using the Wendy networking logic.
+func (c *Cluster) SendToIP(msg Message, address string) error {
 	c.debug("Sending message %s", string(msg.Value))
 	conn, err := net.DialTimeout("tcp", address, time.Duration(c.getNetworkTimeout())*time.Second)
 	if err != nil {

@@ -573,3 +573,121 @@ func TestLeafSetRouteNoneCloser(t *testing.T) {
 		t.Fatalf("Expected nil result, got %s instead.", r3.ID)
 	}
 }
+
+//////////////////////////////////////////////////////////////////////////
+////////////////////////// Benchmarks ////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+// How fast can we insert nodes
+func BenchmarkLeafSetInsert(b *testing.B) {
+	b.StopTimer()
+	selfId, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := newLeafSet(self)
+	benchRand.Seed(randSeed)
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		otherId := randomNodeID()
+		other := *NewNode(otherId, "127.0.0.1", "127.0.0.2", "testing", 55555)
+		_, err = leafset.insertNode(other)
+	}
+}
+
+// How fast can we retrieve nodes by ID
+func BenchmarkLeafSetGetByID(b *testing.B) {
+	b.StopTimer()
+	selfId, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+
+	leafset := newLeafSet(self)
+	benchRand.Seed(randSeed)
+
+	otherId := randomNodeID()
+	other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	_, err = leafset.insertNode(other)
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+
+	b.StartTimer()
+	for i := 0; i < b.N; i++ {
+		leafset.getNode(other.ID)
+	}
+}
+
+var benchLeafSet *leafSet
+
+func initBenchLeafSet(b *testing.B) {
+	selfId, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
+	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	benchLeafSet = newLeafSet(self)
+	benchRand.Seed(randSeed)
+
+	for i := 0; i < 100000; i++ {
+		id := randomNodeID()
+		node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		_, err = benchLeafSet.insertNode(*node)
+		if err != nil {
+			b.Fatal(err.Error())
+		}
+	}
+}
+
+// How fast can we route messages
+func BenchmarkLeafSetRoute(b *testing.B) {
+	b.StopTimer()
+	if benchLeafSet == nil {
+		initBenchLeafSet(b)
+	}
+	benchRand.Seed(randSeed)
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		id := randomNodeID()
+		_, err := benchLeafSet.route(id)
+		if err != nil && err != nodeNotFoundError {
+			if _, ok := err.(IdentityError); !ok {
+				b.Fatalf(err.Error())
+			}
+		}
+	}
+}
+
+// How fast can we dump the leafset
+func BenchmarkLeafSetDump(b *testing.B) {
+	b.StopTimer()
+	if benchLeafSet == nil {
+		initBenchLeafSet(b)
+	}
+	benchRand.Seed(randSeed)
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		benchLeafSet.list()
+	}
+}
+
+// How fast can we export the leafset
+func BenchmarkLeafSetExport(b *testing.B) {
+	b.StopTimer()
+	if benchLeafSet == nil {
+		initBenchLeafSet(b)
+	}
+	benchRand.Seed(randSeed)
+	b.StartTimer()
+
+	for i := 0; i < b.N; i++ {
+		benchLeafSet.export()
+	}
+}

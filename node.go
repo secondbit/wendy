@@ -1,6 +1,7 @@
 package wendy
 
 import (
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,6 +42,24 @@ func NewNode(id NodeID, local, global, region string, port int) *Node {
 // IsZero returns whether or the given Node has been initialised or if it's an empty Node struct. IsZero returns true if the Node has been initialised, false if it's an empty struct.
 func (self Node) IsZero() bool {
 	return self.LocalIP == "" && self.GlobalIP == "" && self.Port == 0
+}
+
+// GetIP returns the IP and port that should be used when communicating with a Node, to respect Regions.
+func (self Node) GetIP(other Node) string {
+	self.mutex.RLock()
+	defer self.mutex.RUnlock()
+	if other.mutex != nil {
+		other.mutex.RLock()
+		defer other.mutex.RUnlock()
+	}
+	ip := ""
+	if self.Region == other.Region {
+		ip = other.LocalIP
+	} else {
+		ip = other.GlobalIP
+	}
+	ip = ip + ":" + strconv.Itoa(other.Port)
+	return ip
 }
 
 // Proximity returns the proximity score for the Node, adjusted for the Region. The proximity score of a Node reflects how close it is to the current Node; a lower proximity score means a closer Node. Nodes outside the current Region are penalised by a multiplier.
