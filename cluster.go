@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -138,6 +139,15 @@ func (c *Cluster) Listen() error {
 		return err
 	}
 	defer ln.Close()
+	// save bound port back to Node in case where port is autoconfigured by OS
+	if c.self.Port == 0 {
+		addr_info := strings.Split(ln.Addr().String(), ":")
+		port, err := strconv.ParseInt(addr_info[len(addr_info)-1], 10, 32)
+		if err != nil {
+			c.log.Println("Couldn't record autoconfigured port:", err)
+		}
+		c.self.Port = int(port)
+	}
 	connections := make(chan net.Conn)
 	go func(ln net.Listener, ch chan net.Conn) {
 		for {
