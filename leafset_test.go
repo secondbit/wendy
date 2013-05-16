@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// Test insertion of a node into the routing table
+// Test insertion of a node into the leaf set
 func TestLeafSetinsertNode(t *testing.T) {
 	self_id, err := NodeIDFromBytes([]byte("this is a test Node for testing purposes only."))
 	if err != nil {
