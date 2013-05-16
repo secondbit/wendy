@@ -47,8 +47,10 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 	}
 	if t.nodes[row][col] != nil {
 		if node.ID.Equals(t.nodes[row][col].ID) {
+			t.debug("Encountered node already in routing table. Versions before insert:\nrouting table: %d\nleaf set: %d\nneighborhood set: %d\n", t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
 			node.updateVersions(t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
 			t.nodes[row][col] = node
+			t.debug("Versions after insert:\nrouting table: %d\nleaf set: %d\nneighborhood set: %d\n", t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
 			return nil, rtDuplicateInsertError
 		}
 		// keep the node that has the closest proximity
@@ -197,4 +199,22 @@ func (t *routingTable) export(rows, cols []int) [32][16]*Node {
 		}
 	}
 	return nodes
+}
+
+func (t *routingTable) debug(format string, v ...interface{}) {
+	if t.logLevel <= LogLevelDebug {
+		t.log.Printf(format, v...)
+	}
+}
+
+func (t *routingTable) warn(format string, v ...interface{}) {
+	if t.logLevel <= LogLevelWarn {
+		t.log.Printf(format, v...)
+	}
+}
+
+func (t *routingTable) err(format string, v ...interface{}) {
+	if t.logLevel <= LogLevelError {
+		t.log.Printf(format, v...)
+	}
 }

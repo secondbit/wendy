@@ -130,12 +130,12 @@ func (self *Node) incrementNSVersion() {
 
 func (self *Node) updateVersions(RTVersion, LSVersion, NSVersion uint64) {
 	for self.routingTableVersion < RTVersion {
-		atomic.AddUint64(&self.routingTableVersion, 1)
+		self.incrementRTVersion()
 	}
 	for self.leafsetVersion < LSVersion {
-		atomic.AddUint64(&self.leafsetVersion, 1)
+		self.incrementLSVersion()
 	}
 	for self.neighborhoodSetVersion < NSVersion {
-		atomic.AddUint64(&self.neighborhoodSetVersion, 1)
+		self.incrementNSVersion()
 	}
 }

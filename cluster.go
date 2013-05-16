@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -44,6 +45,20 @@ type stateTables struct {
 	EOL             bool           `json:"eol,omitempty"`
 }
 
+type proximityCache struct {
+	cache  map[NodeID]int64
+	ticker <-chan time.Time
+	*sync.RWMutex
+}
+
+func newProximityCache() *proximityCache {
+	return &proximityCache{
+		cache:   map[NodeID]int64{},
+		ticker:  time.Tick(1 * time.Hour),
+		RWMutex: new(sync.RWMutex),
+	}
+}
+
 // Cluster holds the information about the state of the network. It is the main interface to the distributed network of Nodes.
 type Cluster struct {
 	self               *Node
@@ -60,15 +75,27 @@ type Cluster struct {
 	credentials        Credentials
 	joined             bool
 	lock               *sync.RWMutex
-	proximityCache     map[NodeID]int64
-	prxCacheTicker     <-chan time.Time
+	proximityCache     *proximityCache
 }
 
 func (c *Cluster) newLeaves(leaves []*Node) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	for _, app := range c.applications {
+	c.debug("Sending newLeaves notifications.")
+	for i, app := range c.applications {
 		app.OnNewLeaves(leaves)
+		c.debug("Sent newLeaves notification %d of %d.", i+1, len(c.applications))
+	}
+	c.debug("Sent newLeaves notifications.")
+}
+
+func (c *Cluster) fanOutJoin(node Node) {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	for _, app := range c.applications {
+		c.debug("Announcing node join.")
+		app.OnNodeJoin(node)
+		c.debug("Announced node join.")
 	}
 }
 
@@ -101,24 +128,24 @@ func (c *Cluster) getNetworkTimeout() int {
 }
 
 func (c *Cluster) cacheProximity(id NodeID, proximity int64) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.proximityCache[id] = proximity
+	c.proximityCache.Lock()
+	defer c.proximityCache.Unlock()
+	c.proximityCache.cache[id] = proximity
 }
 
 func (c *Cluster) getCachedProximity(id NodeID) int64 {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-	if proximity, set := c.proximityCache[id]; set {
+	c.proximityCache.RLock()
+	defer c.proximityCache.RUnlock()
+	if proximity, set := c.proximityCache.cache[id]; set {
 		return proximity
 	}
 	return -1
 }
 
 func (c *Cluster) clearProximityCache() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-	c.proximityCache = map[NodeID]int64{}
+	c.proximityCache.Lock()
+	defer c.proximityCache.Unlock()
+	c.proximityCache.cache = map[NodeID]int64{}
 }
 
 func (c *Cluster) isJoined() bool {
@@ -189,8 +216,7 @@ func NewCluster(self *Node, credentials Credentials) *Cluster {
 		credentials:        credentials,
 		joined:             false,
 		lock:               new(sync.RWMutex),
-		proximityCache:     map[NodeID]int64{},
-		prxCacheTicker:     time.Tick(1 * time.Hour),
+		proximityCache:     newProximityCache(),
 	}
 }
 
@@ -238,6 +264,22 @@ func (c *Cluster) Listen() error {
 		return err
 	}
 	defer ln.Close()
+	// save bound port back to Node in case where port is autoconfigured by OS
+	if c.self.Port == 0 {
+		c.debug("Port set to 0")
+		colonPos := strings.LastIndex(ln.Addr().String(), ":")
+		if colonPos == -1 {
+			c.debug("OS returned an address without a port.")
+			return errors.New("OS returned an address without a port.")
+		}
+		port, err := strconv.ParseInt(ln.Addr().String()[colonPos+1:], 10, 32)
+		if err != nil {
+			c.debug("Couldn't record autoconfigured port: %s", err.Error())
+			return errors.New("Couldn't record autoconfigured port: " + err.Error())
+		}
+		c.debug("Setting port to %d", port)
+		c.self.Port = int(port)
+	}
 	connections := make(chan net.Conn)
 	go func(ln net.Listener, ch chan net.Conn) {
 		for {
@@ -262,7 +304,7 @@ func (c *Cluster) Listen() error {
 			c.debug("Handling connection.")
 			go c.handleClient(conn)
 			break
-		case <-c.prxCacheTicker:
+		case <-c.proximityCache.ticker:
 			c.debug("Emptying proximity cache...")
 			go c.clearProximityCache()
 			break
@@ -302,19 +344,22 @@ func (c *Cluster) Route(key NodeID) (*Node, error) {
 	target, err := c.leafset.route(key)
 	if err != nil {
 		if _, ok := err.(IdentityError); ok {
+			c.debug("I'm the target. Delivering message %s", key)
 			return nil, nil
 		}
 		if err != nodeNotFoundError {
 			return nil, err
 		}
 		if target != nil {
+			c.debug("Target acquired in leafset.")
 			return target, nil
 		}
 	}
-	c.debug("Target not found in leafset, checking routing table.")
+	c.debug("Target not found in leaf set, checking routing table.")
 	target, err = c.table.route(key)
 	if err != nil {
 		if _, ok := err.(IdentityError); ok {
+			c.debug("I'm the target. Delivering message %s", key)
 			return nil, nil
 		}
 		if err != nodeNotFoundError {
@@ -322,6 +367,7 @@ func (c *Cluster) Route(key NodeID) (*Node, error) {
 		}
 	}
 	if target != nil {
+		c.debug("Target acquired in routing table.")
 		return target, nil
 	}
 	return nil, nil
@@ -339,6 +385,7 @@ func (c *Cluster) Join(ip string, port int) error {
 }
 
 func (c *Cluster) fanOutError(err error) {
+	c.debug(err.Error())
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	c.err(err.Error())
@@ -453,7 +500,7 @@ func (c *Cluster) send(msg Message, destination *Node) error {
 		return errors.New("Can't send from a nil node.")
 	}
 	address := c.GetIP(*destination)
-	c.debug("Sending message %s to %s", msg.Key, address)
+	c.debug("Sending message %s with purpose %d to %s", msg.Key, msg.Purpose, address)
 	start := time.Now()
 	err := c.SendToIP(msg, address)
 	if err == nil {
@@ -479,7 +526,7 @@ func (c *Cluster) SendToIP(msg Message, address string) error {
 	if err != nil {
 		return err
 	}
-	c.debug("Sent message %s to %s", msg.Key, address)
+	c.debug("Sent message %s  with purpose %d to %s", msg.Key, msg.Purpose, address)
 	_, err = conn.Read(nil)
 	if err != nil {
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
@@ -562,11 +609,15 @@ func (c *Cluster) onNodeAnnounce(msg Message) {
 		if err != nil {
 			c.fanOutError(err)
 		}
+		return
 	}
+	c.debug("No conflicts!")
 	err := c.insertMessage(msg)
 	if err != nil {
 		c.fanOutError(err)
 	}
+	c.debug("About to fan out join messages...")
+	c.fanOutJoin(msg.Sender)
 }
 
 func (c *Cluster) onNodeExit(msg Message) {
@@ -581,14 +632,17 @@ func (c *Cluster) onNodeExit(msg Message) {
 func (c *Cluster) onStateReceived(msg Message) {
 	err := c.insertMessage(msg)
 	if err != nil {
+		c.debug(err.Error())
 		c.fanOutError(err)
 	}
 	var state stateTables
 	err = json.Unmarshal(msg.Value, &state)
 	if err != nil {
+		c.debug(err.Error())
 		c.fanOutError(err)
 		return
 	}
+	c.debug("State received. EOL is %v, isJoined is %v.", state.EOL, c.isJoined())
 	if !c.isJoined() && state.EOL {
 		c.debug("Haven't announced presence yet... waiting %d seconds", (2 * c.getNetworkTimeout()))
 		time.Sleep(time.Duration(2*c.getNetworkTimeout()) * time.Second)
@@ -726,7 +780,9 @@ func (c *Cluster) announcePresence() error {
 		if node == nil {
 			continue
 		}
+		c.debug("Saw node %s. rtVersion: %d\tlsVersion: %d\tnsVersion: %d", node.ID.String(), node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion)
 		if _, set := sent[node.ID]; set {
+			c.debug("Skipping node %s, already sent announcement there.", node.ID.String())
 			continue
 		}
 		c.debug("Announcing presence to %s", node.ID)
@@ -820,7 +876,9 @@ func (c *Cluster) updateProximity(node *Node) error {
 		if err != nil {
 			return err
 		}
+		c.debug("Proximity to %s checked.", node.ID)
 		c.cacheProximity(node.ID, node.getRawProximity())
+		c.debug("Proximity to %s cached.", node.ID)
 	}
 	return nil
 }
@@ -829,9 +887,11 @@ func (c *Cluster) insertMessage(msg Message) error {
 	var state stateTables
 	err := json.Unmarshal(msg.Value, &state)
 	if err != nil {
+		c.debug("Error unmarshalling JSON: %s", err.Error())
 		return err
 	}
 	sender := &msg.Sender
+	c.debug("Updating versions for %s. RT: %d, LS: %d, NS: %d.", sender.ID.String(), msg.RTVersion, msg.LSVersion, msg.NSVersion)
 	sender.updateVersions(msg.RTVersion, msg.LSVersion, msg.NSVersion)
 	err = c.insert(*sender, StateMask{Mask: all})
 	if err != nil {
@@ -887,9 +947,9 @@ func (c *Cluster) insert(node Node, tables StateMask) error {
 	}
 	c.debug("Inserting node %s", node.ID)
 	if node.getRawProximity() <= 0 && (tables.includeNS() || tables.includeRT()) {
+		c.debug("Updating proximity")
 		c.updateProximity(&node)
-	}
-	if tables.includeRT() {
+		c.debug("Updated proximity")
 		c.debug("Inserting node %s in routing table.", node.ID)
 		resp, err := c.table.insertNode(node, node.getRawProximity())
 		if err != nil && err != rtDuplicateInsertError {
@@ -909,9 +969,10 @@ func (c *Cluster) insert(node Node, tables StateMask) error {
 			return err
 		}
 		if resp != nil && err != lsDuplicateInsertError {
-			c.newLeaves(c.leafset.list())
 			c.debug("Inserted node %s in leaf set.", resp.ID)
+			c.newLeaves(c.leafset.list())
 		}
+		c.debug("At the end of the leafset insert block.")
 		if err == lsDuplicateInsertError {
 			c.debug(err.Error())
 		}
