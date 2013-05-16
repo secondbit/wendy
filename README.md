@@ -19,7 +19,7 @@ The typical `go get secondbit.org/wendy` will install Wendy.
 
 ## Documentation
 
-We took pains to try and follow [the guidelines](http://golang.org/doc/articles/godoc_documenting_go_code.html "Godoc guidelines on golang.org") on writing good documentation for `godoc`. You can view the generated documentation on the excellent [GoPkgDoc](http://go.pkgdoc.org/secondbit.org/wendy "Wendy's documentation on GoPkgDoc").
+We took pains to try and follow [the guidelines](http://golang.org/doc/articles/godoc_documenting_go_code.html "Godoc guidelines on golang.org") on writing good documentation for `godoc`. You can view the generated documentation on the excellent [godoc.org](http://godoc.org/secondbit.org/wendy "Wendy's documentation on godoc.org").
 
 ## Use
 
@@ -34,7 +34,7 @@ hostname, err := os.Hostname()
 if err != nil {
 	panic(err.Error())
 }
-id, err := wendy.NodeIDFromBytes([]byte(hostname+" test server"))
+id, err := wendy.NodeIDFromBytes([]byte(hostname))
 if err != nil {
 	panic(err.Error())
 }
@@ -47,7 +47,7 @@ NewNode expects five parameters:
 2. Your local IP address. This IP address only needs to be accessible to your Region (a concept that will be explained below).
 3. Your global IP address. This IP address should be accessible to any Node in your network&mdash;the entire Internet should be able to reach the IP.
 4. Your Region. Your Region is a string that helps segment your Wendy network to keep bandwidth minimal. For cloud providers (e.g., EC2), network traffic within a region is free. To take advantage of this, we modified the Wendy algorithm to use the local IP address when two Nodes are in the same Region, and the global IP address the rest of the time, while heavily favouring Nodes that are in the same Region. This allows you to have Nodes in multiple Regions in the same Cluster while minimising your bandwidth costs.
-5. The port this Node should listen on, as an int. Should be an open port you have permission to listen on.
+5. The port this Node should listen on, as an int. Should be an open port you have permission to listen on. If you use `0`, Wendy will automatically use a randomly chosen open port.
 
 Once you have a Node, you can join the Cluster.
 
@@ -55,7 +55,7 @@ Once you have a Node, you can join the Cluster.
 cluster := wendy.NewCluster(node, credentials)
 ```
 
-NewCluster just creates a Cluster object, initialises the state tables and channels used to keep the algorithm concurrency-safe, and returns it. It requires that you specify the current Node and supply [Credentials](http://go.pkgdoc.org/secondbit.org/wendy#Credentials) for the Cluster.
+NewCluster just creates a Cluster object, initialises the state tables and channels used to keep the algorithm concurrency-safe, and returns it. It requires that you specify the current Node and supply [Credentials](http://godoc.org/secondbit.org/wendy#Credentials) for the Cluster.
 
 Credentials are an interface that Wendy defines to help control access to your clusters. Credentials could be whatever you want them to be: public/private keys, a single word or phrase, a rather large number... anything at all is fair game. The only rules for Credentials are as follows:
 
@@ -79,7 +79,7 @@ defer cluster.Stop()
 
 ### Registering Handlers For Your Application
 
-Wendy offers several callbacks at various points in the process of exchanging messages within your Cluster. You can use these callbacks to register listeners within your application. These callbacks are simply instances of a type that fulfills the [wendy.Application](http://go.pkgdoc.org/secondbit.org/wendy#Application) interface and are subsequently registered to a cluster.
+Wendy offers several callbacks at various points in the process of exchanging messages within your Cluster. You can use these callbacks to register listeners within your application. These callbacks are simply instances of a type that fulfills the [wendy.Application](http://godoc.org/secondbit.org/wendy#Application) interface and are subsequently registered to a cluster.
 
 ```go
 type WendyApplication struct {
@@ -118,7 +118,7 @@ app := &WendyApplication{}
 cluster.RegisterCallback(app)
 ```
 
-The methods will be invoked at the appropriate points in the lifecycle of the cluster. You should consult [the documentation](http://go.pkgdoc.org/secondbit.org/wendy#Application) for more information.
+The methods will be invoked at the appropriate points in the lifecycle of the cluster. You should consult [the documentation](http://godoc.org/secondbit.org/wendy#Application) for more information.
 
 ### Announcing Your Presence
 
@@ -170,6 +170,7 @@ To contribute to Wendy:
 
 * **Fork** the repository
 * **Modify** your fork
+* Ensure your fork **passes all tests**
 * **Send** a pull request
 	* Bonus points if the pull request includes *what* you changed, *why* you changed it, and *has unit tests* attached.
 	* For the love of all that is holy, please use `go fmt` *before* you send the pull request.
@@ -180,14 +181,11 @@ We'll review it and merge it in if it's appropriate.
 
 We approached this pragmatically, so there are some differences between the Pastry specification (as we understand it) and our implementation. The end result should not be materially changed.
 
-* We *removed the concept of a Neighborhood Set*. The Neighborhood Set was intended to keep information on the proximity of Nodes. We opted to instead store the proximity information inside each Node object.
-* We *store every Node in the Routing Table*. The specification dictates that when two Nodes compete for the same space in the Routing Table, only the closest (based on proximity) is stored. We opted to store both, then *route* based on proximity (when routing a message, we select the Node with the closest proximity score). In clusters of sufficiently large size (thousands), this may create memory concerns, as we estimate that Nodes may occupy roughly a couple KB in memory. For our purposes, the memory cost isn't a concern, and it greatly simplifies the algorithm.
 * We introduced the concept of Regions. Regions are used to partition your Cluster and give preference to Nodes that are within the same Region. It is useful on cloud providers like EC2 to minimise traffic between regions, which tends to cost more than traffic on the local network. This is implemented as a raw multiplier on the proximity score of nodes, based on if the regions match or not. It should not materially affect the algorithm, outside the intended bias towards local traffic over global traffic.
 
 ## Known Bugs
 
-* If you should happen to have two Nodes in a Cluster who don't agree as to what time it is, it's possible to get them stuck in an infinite loop that saturates the network with messages. For the love of God, use NTP to make your Nodes agree what time it is. (*Note*: This is to prevent race conditions when two Nodes join simultaneously.)
-* In the event that: 1) a Node is added, 2) the Node receives a message *before* it has finished initialising its state tables, and 3) the Node, based on its partial implementation of the state tables, is the closest Node to the message ID, that Node will incorrectly assume it is the destination for the message when there *may* be a better suited Node in the network. Depending on network speeds and the size of the cluster, this period of potential-for-message-swallowing is expected to last, at most, a few seconds, and will only occur when a Node is added to the cluster. If, as per the previous bug, your Nodes don't agree on the time… well, God help you.
+* In the event that: 1) a Node is added, 2) the Node receives a message *before* it has finished initialising its state tables, and 3) the Node, based on its partial implementation of the state tables, is the closest Node to the message ID, that Node will incorrectly assume it is the destination for the message when there *may* be a better suited Node in the network. Depending on network speeds and the size of the cluster, this period of potential-for-message-swallowing is expected to last, at most, a few seconds, and will only occur when a Node is added to the cluster.
 * In the event that one of the two immediate neighbours (in the NodeID space) of the current Node leaves the cluster, the Node will have a hole in its leaf set until it next receives (or has a reason to request) state information from another Node. This should not affect the outcome of the routing process, but may lead to sub-optimal routing times.
 * We currently rely on the system clock for a few of our functions. If you (or NTP) change the clock in unexpected and significant ways, you will run into problems. Please see [issue 4](https://github.com/secondbit/wendy/issues/4) for more information.
 * Our Credentials implementation is currently vulnerable to man-in-the-middle and replay attacks. We are considering the best method for adding a handshake to the low-level TCP connection to better secure your traffic. See [issue 3](https://github.com/secondbit/wendy/issues/3) for more information or to weigh in on the discussion.
@@ -200,6 +198,7 @@ The following people contributed code that found its way into Wendy:
 * Jesse McNelis ([jessta](https://github.com/jessta))
 * Evan Shaw ([edsrzf](https://github.com/edsrzf))
 * Alec Thomas ([alecthomas](https://github.com/alecthomas))
+* Graeme Humphries ([unit3](https://github.com/unit3))
 
 ## Contributors
 
