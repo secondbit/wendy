@@ -953,6 +953,7 @@ func (c *Cluster) insert(node Node, tables StateMask) error {
 		c.debug("Inserting node %s in routing table.", node.ID)
 		resp, err := c.table.insertNode(node, node.getRawProximity())
 		if err != nil && err != rtDuplicateInsertError {
+			c.err("Error inserting node: %s", err.Error())
 			return err
 		}
 		if resp != nil && err != rtDuplicateInsertError {
