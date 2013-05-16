@@ -5,7 +5,7 @@ An open source, pure-[Go](http://www.golang.org "Pretty much the best programmin
 ## Status
 [![Build Status](https://secure.travis-ci.org/secondbit/wendy.png)](http://travis-ci.org/secondbit/wendy)
 
-**Alpha**: Wendy is still in active development. It should not be used for mission-critical software. While it *appears* to function as it should, we're still testing it to make sure there aren't any issues.
+**Beta1**: Wendy is still in active development. It should not be used for mission-critical software. It has been beat on a little, but there are probably still bugs we haven't found or fixed.
 
 ## Requirements
 
