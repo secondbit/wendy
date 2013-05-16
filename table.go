@@ -47,7 +47,7 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 	}
 	if t.nodes[row][col] != nil {
 		if node.ID.Equals(t.nodes[row][col].ID) {
-			t.debug("Encountered node already in routing table. Versions before insert:\nrouting table: %d\nleaf set: %d\nneighborhood set: %d\n", t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
+			t.debug("Node %s already in routing table. Versions before insert:\nrouting table: %d\nleaf set: %d\nneighborhood set: %d\n", t.nodes[row][col].ID.String(), t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
 			node.updateVersions(t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
 			t.nodes[row][col] = node
 			t.debug("Versions after insert:\nrouting table: %d\nleaf set: %d\nneighborhood set: %d\n", t.nodes[row][col].routingTableVersion, t.nodes[row][col].leafsetVersion, t.nodes[row][col].neighborhoodSetVersion)
@@ -56,10 +56,12 @@ func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string,
 		// keep the node that has the closest proximity
 		if t.self.Proximity(t.nodes[row][col]) > t.self.Proximity(node) {
 			t.nodes[row][col] = node
+			t.debug("Inserted node %s into routing table.", node.ID.String())
 			return node, nil
 		}
 	} else {
 		t.nodes[row][col] = node
+		t.debug("Inserted node %s into routing table.", node.ID.String())
 		t.self.incrementRTVersion()
 		return node, nil
 	}
@@ -77,7 +79,11 @@ func (t *routingTable) getNode(id NodeID) (*Node, error) {
 	if col >= len(t.nodes[row]) {
 		return nil, impossibleError
 	}
-	if t.nodes[row][col] == nil || !t.nodes[row][col].ID.Equals(id) {
+	if t.nodes[row][col] == nil {
+		return nil, nodeNotFoundError
+	}
+	if !t.nodes[row][col].ID.Equals(id) {
+		t.debug("Node not found. Expected %s, got %s.", id.String(), t.nodes[row][col].ID.String())
 		return nil, nodeNotFoundError
 	}
 	return t.nodes[row][col], nil
