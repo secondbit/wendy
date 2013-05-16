@@ -170,21 +170,21 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 	if testing.Short() {
 		return
 	}
-	one, err := makeCluster("this is a test Node for testing purposes only.")
+	one, err := makeCluster("A test Node for testing purposes only.")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	one.debug("One is %s", one.self.ID)
 	oneCB := newTestCallback(t)
 	one.RegisterCallback(oneCB)
-	two, err := makeCluster("this is some other Node for testing purposes only.")
+	two, err := makeCluster("just some other Node for testing purposes only.")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	two.debug("Two is %s", two.self.ID)
 	twoCB := newTestCallback(t)
 	two.RegisterCallback(twoCB)
-	three, err := makeCluster("just a third Node for testing purposes only.")
+	three, err := makeCluster("yet a third Node for testing purposes only.")
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
