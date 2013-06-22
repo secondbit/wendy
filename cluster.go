@@ -811,6 +811,7 @@ func (c *Cluster) repairLeafset(id NodeID) error {
 	if err != nil {
 		if err == nodeNotFoundError {
 			c.warn("No node found when trying to repair the leafset. Was there a catastrophe?")
+			return nil
 		} else {
 			return err
 		}
