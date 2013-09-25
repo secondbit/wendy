@@ -31,7 +31,7 @@ func (t *routingTable) insertNode(node Node, proximity int64) (*Node, error) {
 	return t.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
 }
 
-func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int, rtVersion, lsVersion, nsVersion uint64, proximity int64) (*Node, error) {
+func (t *routingTable) insertValues(id NodeID, localIP, globalIP, region string, port int, rtVersion, lsVersion, nsVersion uint32, proximity int64) (*Node, error) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	node := NewNode(id, localIP, globalIP, region, port)

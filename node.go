@@ -17,9 +17,9 @@ type Node struct {
 	proximity              int64
 	mutex                  *sync.RWMutex // lock and unlock a Node for concurrency safety
 	lastHeardFrom          time.Time     // The last time we heard from this node
-	leafsetVersion         uint64        // the version number of the leafset
-	routingTableVersion    uint64        // the version number of the routing table
-	neighborhoodSetVersion uint64        // the version number of the neighborhood set
+	leafsetVersion         uint32        // the version number of the leafset
+	routingTableVersion    uint32        // the version number of the routing table
+	neighborhoodSetVersion uint32        // the version number of the neighborhood set
 }
 
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
@@ -117,18 +117,18 @@ func (self *Node) LastHeardFrom() time.Time {
 }
 
 func (self *Node) incrementLSVersion() {
-	atomic.AddUint64(&self.leafsetVersion, 1)
+	atomic.AddUint32(&self.leafsetVersion, 1)
 }
 
 func (self *Node) incrementRTVersion() {
-	atomic.AddUint64(&self.routingTableVersion, 1)
+	atomic.AddUint32(&self.routingTableVersion, 1)
 }
 
 func (self *Node) incrementNSVersion() {
-	atomic.AddUint64(&self.neighborhoodSetVersion, 1)
+	atomic.AddUint32(&self.neighborhoodSetVersion, 1)
 }
 
-func (self *Node) updateVersions(RTVersion, LSVersion, NSVersion uint64) {
+func (self *Node) updateVersions(RTVersion, LSVersion, NSVersion uint32) {
 	for self.routingTableVersion < RTVersion {
 		self.incrementRTVersion()
 	}

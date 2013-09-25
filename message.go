@@ -7,9 +7,9 @@ type Message struct {
 	Key         NodeID // The message's ID
 	Value       []byte // The message being passed
 	Credentials []byte // The Credentials used to authenticate the Message
-	LSVersion   uint64 // The version of the leaf set, for join messages
-	RTVersion   uint64 // The version of the routing table, for join messages
-	NSVersion   uint64 // The version of the neighborhood set, for join messages
+	LSVersion   uint32 // The version of the leaf set, for join messages
+	RTVersion   uint32 // The version of the routing table, for join messages
+	NSVersion   uint32 // The version of the neighborhood set, for join messages
 	Hop         int    // The number of hops the message has taken
 }
 

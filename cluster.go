@@ -1,9 +1,10 @@
 package wendy
 
 import (
-	"encoding/json"
+	"bytes"
 	"errors"
 	"io"
+	"labix.org/v2/mgo/bson"
 	"log"
 	"net"
 	"os"
@@ -39,10 +40,10 @@ func (m StateMask) includeNS() bool {
 }
 
 type stateTables struct {
-	RoutingTable    *[32][16]*Node `json:"rt,omitempty"`
-	LeafSet         *[2][16]*Node  `json:"ls,omitempty"`
-	NeighborhoodSet *[32]*Node     `json:"ns,omitempty"`
-	EOL             bool           `json:"eol,omitempty"`
+	RoutingTable    [32][16]*Node `bson:"rt,omitempty"`
+	LeafSet         [2][16]*Node  `bson:"ls,omitempty"`
+	NeighborhoodSet [32]*Node     `bson:"ns,omitempty"`
+	EOL             bool          `bson:"eol,omitempty"`
 }
 
 type proximityCache struct {
@@ -435,8 +436,13 @@ func (c *Cluster) deliver(msg Message) {
 func (c *Cluster) handleClient(conn net.Conn) {
 	defer conn.Close()
 	var msg Message
-	decoder := json.NewDecoder(conn)
-	err := decoder.Decode(&msg)
+	input := new(bytes.Buffer)
+	_, err := input.ReadFrom(conn)
+	if err != nil {
+		c.fanOutError(err)
+		return
+	}
+	err = bson.Unmarshal(input.Bytes(), &msg)
 	if err != nil {
 		c.fanOutError(err)
 		return
@@ -521,8 +527,11 @@ func (c *Cluster) SendToIP(msg Message, address string) error {
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(time.Duration(c.getNetworkTimeout()) * time.Second))
-	encoder := json.NewEncoder(conn)
-	err = encoder.Encode(msg)
+	resp, err := bson.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	_, err = conn.Write(resp)
 	if err != nil {
 		return err
 	}
@@ -636,7 +645,7 @@ func (c *Cluster) onStateReceived(msg Message) {
 		c.fanOutError(err)
 	}
 	var state stateTables
-	err = json.Unmarshal(msg.Value, &state)
+	err = bson.Unmarshal(msg.Value, &state)
 	if err != nil {
 		c.debug(err.Error())
 		c.fanOutError(err)
@@ -660,7 +669,7 @@ func (c *Cluster) onStateReceived(msg Message) {
 func (c *Cluster) onStateRequested(msg Message) {
 	c.debug("%s wants to know about my state tables!", msg.Sender.ID)
 	var mask StateMask
-	err := json.Unmarshal(msg.Value, &mask)
+	err := bson.Unmarshal(msg.Value, &mask)
 	if err != nil {
 		c.fanOutError(err)
 		return
@@ -683,7 +692,7 @@ func (c *Cluster) onRaceCondition(msg Message) {
 func (c *Cluster) onRepairRequest(msg Message) {
 	c.debug("Helping to repair %s", msg.Sender.ID)
 	var mask StateMask
-	err := json.Unmarshal(msg.Value, &mask)
+	err := bson.Unmarshal(msg.Value, &mask)
 	if err != nil {
 		c.fanOutError(err)
 		return
@@ -703,15 +712,15 @@ func (c *Cluster) dumpStateTables(tables StateMask) (stateTables, error) {
 	var state stateTables
 	if tables.includeRT() {
 		routingTable := c.table.export(tables.Rows, tables.Cols)
-		state.RoutingTable = &routingTable
+		state.RoutingTable = routingTable
 	}
 	if tables.includeLS() {
 		leafSet := c.leafset.export()
-		state.LeafSet = &leafSet
+		state.LeafSet = leafSet
 	}
 	if tables.includeNS() {
 		neighborhoodSet := c.neighborhoodset.export()
-		state.NeighborhoodSet = &neighborhoodSet
+		state.NeighborhoodSet = neighborhoodSet
 	}
 	return state, nil
 }
@@ -722,7 +731,7 @@ func (c *Cluster) sendStateTables(node Node, tables StateMask, eol bool) error {
 		return err
 	}
 	state.EOL = eol
-	data, err := json.Marshal(state)
+	data, err := bson.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -744,7 +753,7 @@ func (c *Cluster) sendRaceNotification(node Node, tables StateMask) error {
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(state)
+	data, err := bson.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -767,7 +776,7 @@ func (c *Cluster) announcePresence() error {
 	if err != nil {
 		return err
 	}
-	data, err := json.Marshal(state)
+	data, err := bson.Marshal(state)
 	if err != nil {
 		return err
 	}
@@ -816,7 +825,7 @@ func (c *Cluster) repairLeafset(id NodeID) error {
 		}
 	}
 	mask := StateMask{Mask: lS}
-	data, err := json.Marshal(mask)
+	data, err := bson.Marshal(mask)
 	if err != nil {
 		return err
 	}
@@ -836,7 +845,7 @@ func (c *Cluster) repairTable(id NodeID) error {
 		}
 	}
 	mask := StateMask{Mask: rT, Rows: []int{reqRow}, Cols: []int{col}}
-	data, err := json.Marshal(mask)
+	data, err := bson.Marshal(mask)
 	if err != nil {
 		return err
 	}
@@ -853,7 +862,7 @@ func (c *Cluster) repairTable(id NodeID) error {
 func (c *Cluster) repairNeighborhood() error {
 	targets := c.neighborhoodset.list()
 	mask := StateMask{Mask: nS}
-	data, err := json.Marshal(mask)
+	data, err := bson.Marshal(mask)
 	if err != nil {
 		return err
 	}
@@ -885,9 +894,9 @@ func (c *Cluster) updateProximity(node *Node) error {
 
 func (c *Cluster) insertMessage(msg Message) error {
 	var state stateTables
-	err := json.Unmarshal(msg.Value, &state)
+	err := bson.Unmarshal(msg.Value, &state)
 	if err != nil {
-		c.debug("Error unmarshalling JSON: %s", err.Error())
+		c.debug("Error unmarshalling BSON: %s", err.Error())
 		return err
 	}
 	sender := &msg.Sender
@@ -897,40 +906,34 @@ func (c *Cluster) insertMessage(msg Message) error {
 	if err != nil {
 		return err
 	}
-	if state.NeighborhoodSet != nil {
-		for _, node := range state.NeighborhoodSet {
+	for _, node := range state.NeighborhoodSet {
+		if node == nil {
+			continue
+		}
+		err = c.insert(*node, StateMask{Mask: nS})
+		if err != nil {
+			return err
+		}
+	}
+	for _, side := range state.LeafSet {
+		for _, node := range side {
 			if node == nil {
 				continue
 			}
-			err = c.insert(*node, StateMask{Mask: nS})
+			err = c.insert(*node, StateMask{Mask: lS | nS})
 			if err != nil {
 				return err
 			}
 		}
 	}
-	if state.LeafSet != nil {
-		for _, side := range state.LeafSet {
-			for _, node := range side {
-				if node == nil {
-					continue
-				}
-				err = c.insert(*node, StateMask{Mask: lS | nS})
-				if err != nil {
-					return err
-				}
+	for _, row := range state.RoutingTable {
+		for _, node := range row {
+			if node == nil {
+				continue
 			}
-		}
-	}
-	if state.RoutingTable != nil {
-		for _, row := range state.RoutingTable {
-			for _, node := range row {
-				if node == nil {
-					continue
-				}
-				err = c.insert(*node, StateMask{Mask: rT | nS})
-				if err != nil {
-					return err
-				}
+			err = c.insert(*node, StateMask{Mask: rT | nS})
+			if err != nil {
+				return err
 			}
 		}
 	}

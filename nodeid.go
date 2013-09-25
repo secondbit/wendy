@@ -3,9 +3,9 @@ package wendy
 import (
 	"encoding/binary"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"labix.org/v2/mgo/bson"
 	"math"
 	"math/big"
 )
@@ -184,18 +184,19 @@ func (id NodeID) Base10() *big.Int {
 	return &result
 }
 
-// MarshalJSON fulfills the Marshaler interface, allowing NodeIDs to be serialised to JSON safely.
-func (id NodeID) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + id.String() + `"`), nil
+// GetBSON fulfills the Getter interface, allowing NodeIDs to be serialised to BSON safely.
+func (id NodeID) GetBSON() ([]byte, error) {
+	return bson.Marshal(id.String())
 }
 
-// UnmarshalJSON fulfills the Unmarshaler interface, allowing NodeIDs to be unserialised from JSON safely.
-func (id *NodeID) UnmarshalJSON(source []byte) error {
+// SetBSON fulfills the Setter interface, allowing NodeIDs to be unserialised from BSON safely.
+func (id *NodeID) SetBSON(raw bson.Raw) error {
 	if id == nil {
-		return errors.New("UnmarshalJSON on nil NodeID.")
+		return errors.New("UnmarshalBSON on nil NodeID.")
 	}
 	var str string
-	err := json.Unmarshal(source, &str)
+	err := raw.Unmarshal(&str)
+	panic(err)
 	if err != nil {
 		return err
 	}
