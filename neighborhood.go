@@ -101,10 +101,16 @@ func (n *neighborhoodSet) getNode(id NodeID) (*Node, error) {
 	return nil, nodeNotFoundError
 }
 
-func (n *neighborhoodSet) export() [32]*Node {
+func (n *neighborhoodSet) export() []state {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
-	return n.nodes
+	states := make([]state, 0)
+	for pos, node := range n.nodes {
+		if node != nil {
+			states = append(states, state{Pos: pos, Node: *node})
+		}
+	}
+	return states
 }
 
 func (n *neighborhoodSet) list() []*Node {

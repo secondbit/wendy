@@ -178,10 +178,21 @@ func (l *leafSet) route(key NodeID) (*Node, error) {
 	return nil, nodeNotFoundError
 }
 
-func (l *leafSet) export() [2][16]*Node {
+func (l *leafSet) export() []state {
 	l.lock.RLock()
 	defer l.lock.RUnlock()
-	return [2][16]*Node{l.left, l.right}
+	states := make([]state, 0)
+	for pos, node := range l.left {
+		if node != nil {
+			states = append(states, state{Pos: pos, Side: 0, Node: *node})
+		}
+	}
+	for pos, node := range l.right {
+		if node != nil {
+			states = append(states, state{Pos: pos, Side: 1, Node: *node})
+		}
+	}
+	return states
 }
 
 func (l *leafSet) list() []*Node {
