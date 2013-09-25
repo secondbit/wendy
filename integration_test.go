@@ -95,7 +95,7 @@ func makeCluster(idBytes string) (*Cluster, error) {
 // Test joining two nodes
 func TestClusterJoinTwo(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
+		return
 	}
 	one, err := makeCluster("this is a test Node for testing purposes only.")
 	if err != nil {
@@ -168,7 +168,7 @@ func TestClusterJoinTwo(t *testing.T) {
 // Test joining three nodes
 func TestClusterJoinThreeToTwo(t *testing.T) {
 	if testing.Short() {
-		t.Skip("Skipping test in short mode.")
+		return
 	}
 	one, err := makeCluster("A test Node for testing purposes only.")
 	if err != nil {
