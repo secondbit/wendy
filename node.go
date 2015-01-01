@@ -39,7 +39,8 @@ func NewNode(id NodeID, local, global, region string, port int) *Node {
 	}
 }
 
-// IsZero returns whether or the given Node has been initialised or if it's an empty Node struct. IsZero returns true if the Node has been initialised, false if it's an empty struct.
+// IsZero returns whether or the given Node has been initialised or if it's an empty Node struct.
+// The result is true, if the IPs and port are empty, false if it has been initialised.
 func (self Node) IsZero() bool {
 	return self.LocalIP == "" && self.GlobalIP == "" && self.Port == 0
 }
