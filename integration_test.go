@@ -85,7 +85,7 @@ func makeCluster(idBytes string) (*Cluster, error) {
 		return nil, err
 	}
 	node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 0)
-	cluster := NewCluster(node, nil)
+	cluster := NewCluster(node, nil, NewTCPTransport())
 	cluster.SetHeartbeatFrequency(10)
 	cluster.SetNetworkTimeout(1)
 	cluster.SetLogLevel(LogLevelDebug)
