@@ -62,6 +62,7 @@ func newProximityCache() *proximityCache {
 // Cluster holds the information about the state of the network. It is the main interface to the distributed network of Nodes.
 type Cluster struct {
 	self               *Node
+	transport          Transport
 	table              *routingTable
 	leafset            *leafSet
 	neighborhoodset    *neighborhoodSet
@@ -200,9 +201,10 @@ func (c *Cluster) SetNetworkTimeout(timeout int) {
 }
 
 // NewCluster creates a new instance of a connection to the network and intialises the state tables and channels it requires.
-func NewCluster(self *Node, credentials Credentials) *Cluster {
+func NewCluster(self *Node, credentials Credentials, transport Transport) *Cluster {
 	return &Cluster{
 		self:               self,
+		transport:          transport,
 		table:              newRoutingTable(self),
 		leafset:            newLeafSet(self),
 		neighborhoodset:    newNeighborhoodSet(self),
@@ -259,7 +261,7 @@ func (c *Cluster) RegisterCallback(app Application) {
 func (c *Cluster) Listen() error {
 	portstr := strconv.Itoa(c.self.Port)
 	c.debug("Listening on port %d", c.self.Port)
-	ln, err := net.Listen("tcp", ":"+portstr)
+	ln, err := c.transport.Listen(":" + portstr)
 	if err != nil {
 		return err
 	}
@@ -514,7 +516,7 @@ func (c *Cluster) send(msg Message, destination *Node) error {
 // SendToIP sends a message directly to an IP using the Wendy networking logic.
 func (c *Cluster) SendToIP(msg Message, address string) error {
 	c.debug("Sending message %s", string(msg.Value))
-	conn, err := net.DialTimeout("tcp", address, time.Duration(c.getNetworkTimeout())*time.Second)
+	conn, err := c.transport.DialTimeout(address, time.Duration(c.getNetworkTimeout())*time.Second)
 	if err != nil {
 		c.debug(err.Error())
 		return deadNodeError
