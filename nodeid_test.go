@@ -4,6 +4,9 @@ import (
 	"bytes"
 	"math/big"
 	"testing"
+
+	ci "github.com/libp2p/go-libp2p-core/crypto"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 func TestNodeIDString(t *testing.T) {
@@ -29,6 +32,23 @@ func TestNodeIDString(t *testing.T) {
 		if str != test.str {
 			t.Errorf("test %v: expected %q, got %q", i, test.str, str)
 		}
+	}
+}
+
+func Test_NodeIDFromPeerID(t *testing.T) {
+	pk, _, err := ci.GenerateKeyPair(ci.Ed25519, 256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid, err := peer.IDFromPrivateKey(pk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NodeIDFromPeerID(pid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NodeIDFromPeerID(peer.ID("err")); err == nil {
+		t.Fatal("error expected")
 	}
 }
 
