@@ -10,14 +10,20 @@ func TestNeighborhoodSetInsertNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", other_id.String())
 	neighborhood := newNeighborhoodSet(self)
 	r, err := neighborhood.insertNode(*other, 0)
@@ -45,14 +51,20 @@ func TestNeighborhoodSetDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", other_id.String())
 	neighborhood := newNeighborhoodSet(self)
 	r, err := neighborhood.insertNode(*other, 0)
@@ -85,14 +97,20 @@ func TestNeighborhoodSetDeleteFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", other_id.String())
 	neighborhood := newNeighborhoodSet(self)
 	r, err := neighborhood.insertNode(*other, 0)
@@ -106,7 +124,10 @@ func TestNeighborhoodSetDeleteFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	second := NewNode(second_id, "!27.0.0.3", "127.0.0.3", "testing", 0)
+	second, err := NewNode(second_id, "!27.0.0.3", "127.0.0.3", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r = nil
 	r, err = neighborhood.insertNode(*second, 10)
 	if err != nil {
@@ -150,14 +171,20 @@ func TestNeighborhoodSetDeleteLast(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", other_id.String())
 	neighborhood := newNeighborhoodSet(self)
 	r, err := neighborhood.insertNode(*other, 10)
@@ -171,7 +198,10 @@ func TestNeighborhoodSetDeleteLast(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	second := NewNode(second_id, "!27.0.0.3", "127.0.0.3", "testing", 0)
+	second, err := NewNode(second_id, "!27.0.0.3", "127.0.0.3", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r = nil
 	r, err = neighborhood.insertNode(*second, 0)
 	if err != nil {
@@ -215,14 +245,20 @@ func TestNeighborhoodSetDeleteMiddle(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", other_id.String())
 	neighborhood := newNeighborhoodSet(self)
 	r, err := neighborhood.insertNode(*other, 0)
@@ -236,7 +272,10 @@ func TestNeighborhoodSetDeleteMiddle(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	second := NewNode(second_id, "!27.0.0.3", "127.0.0.3", "testing", 0)
+	second, err := NewNode(second_id, "!27.0.0.3", "127.0.0.3", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r = nil
 	r, err = neighborhood.insertNode(*second, 10)
 	if err != nil {
@@ -249,7 +288,10 @@ func TestNeighborhoodSetDeleteMiddle(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 0)
+	third, err := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r = nil
 	r, err = neighborhood.insertNode(*third, 20)
 	if err != nil {
@@ -303,16 +345,21 @@ func BenchmarkNeighborhoodSetInsert(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	neighborhood := newNeighborhoodSet(self)
 	benchRand.Seed(randSeed)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		otherId := randomNodeID()
-		other := *NewNode(otherId, "127.0.0.1", "127.0.0.2", "testing", 55555)
-		_, err = neighborhood.insertNode(other, int64(i%len(neighborhood.nodes)))
+		other, err := NewNode(otherId, "127.0.0.1", "127.0.0.2", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = neighborhood.insertNode(*other, int64(i%len(neighborhood.nodes)))
 	}
 }
 
@@ -323,15 +370,20 @@ func BenchmarkNeighborhoodSetGetByID(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	neighborhood := newNeighborhoodSet(self)
 	benchRand.Seed(randSeed)
 
 	for i := 0; i < len(neighborhood.nodes); i++ {
 		otherId := randomNodeID()
-		other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
-		_, err = neighborhood.insertNode(other, int64(i))
+		other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = neighborhood.insertNode(*other, int64(i))
 		if err != nil {
 			b.Fatalf(err.Error())
 		}
@@ -350,13 +402,19 @@ func initBenchNeighborhoodSet(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	benchNeighborhood = newNeighborhoodSet(self)
 	benchRand.Seed(randSeed)
 
 	for i := 0; i < len(benchNeighborhood.nodes); i++ {
 		id := randomNodeID()
-		node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
 		_, err = benchNeighborhood.insertNode(*node, int64(i))
 		if err != nil {
 			b.Fatal(err.Error())

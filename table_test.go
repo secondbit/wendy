@@ -1,9 +1,21 @@
 package wendy
 
 import (
+	"fmt"
 	"math/rand"
 	"testing"
+
+	"github.com/multiformats/go-multiaddr"
 )
+
+func newMultiaddr(t *testing.T, ip string, port int) multiaddr.Multiaddr {
+	new := fmt.Sprintf("/ip4/%s/tcp/%v", ip, port)
+	addr, err := multiaddr.NewMultiaddr(new)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return addr
+}
 
 // Test insertion of a node into the routing table
 func TestRoutingTableInsert(t *testing.T) {
@@ -11,14 +23,20 @@ func TestRoutingTableInsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	row := self_id.CommonPrefixLen(other_id)
 	col := other_id.Digit(row)
 	t.Logf("%s\n", other_id.String())
@@ -50,13 +68,18 @@ func TestRoutingTableDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	table := newRoutingTable(self)
 	r, err := table.insertNode(*other, self.Proximity(other))
 	if err != nil {
@@ -85,15 +108,20 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	table := newRoutingTable(self)
 
 	first_id, err := NodeIDFromBytes([]byte("12345677890abcde"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := table.insertNode(*first, self.Proximity(first))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -105,7 +133,10 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	second, err := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r2, err := table.insertNode(*second, self.Proximity(second))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -140,8 +171,10 @@ func TestRoutingTableRouteNone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	table := newRoutingTable(self)
 
 	first_id, err := NodeIDFromBytes([]byte("12345657890abcde"))
@@ -149,7 +182,10 @@ func TestRoutingTableRouteNone(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	row := self_id.CommonPrefixLen(first_id)
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := table.insertNode(*first, self.Proximity(first))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -184,15 +220,20 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	table := newRoutingTable(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890abdefg"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := table.insertNode(*first, self.Proximity(first))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -205,7 +246,10 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	second := NewNode(second_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second, err := NewNode(second_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r2, err := table.insertNode(*second, self.Proximity(second))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -244,8 +288,10 @@ func TestRoutingTableRouteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	table := newRoutingTable(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
@@ -253,7 +299,10 @@ func TestRoutingTableRouteOnly(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	row := self_id.CommonPrefixLen(first_id)
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := table.insertNode(*first, self.Proximity(first))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -287,15 +336,20 @@ func TestRoutingTableRouteMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	table := newRoutingTable(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := table.insertNode(*first, self.Proximity(first))
 	if err != nil {
 		t.Fatal(err.Error())
@@ -348,16 +402,21 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	table := newRoutingTable(self)
 	benchRand.Seed(randSeed)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		otherId := randomNodeID()
-		other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
-		_, err = table.insertNode(other, self.Proximity(&other))
+		other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = table.insertNode(*other, self.Proximity(other))
 	}
 }
 
@@ -368,14 +427,19 @@ func BenchmarkRoutingTableGetByID(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	table := newRoutingTable(self)
 	benchRand.Seed(randSeed)
 
 	otherId := randomNodeID()
-	other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	_, err = table.insertNode(other, self.Proximity(&other))
+	other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, err = table.insertNode(*other, self.Proximity(other))
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
@@ -392,13 +456,19 @@ func initBenchTable(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	benchTable = newRoutingTable(self)
 	benchRand.Seed(randSeed)
 
 	for i := 0; i < 100000; i++ {
 		id := randomNodeID()
-		node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
 		_, err = benchTable.insertNode(*node, self.Proximity(node))
 		if err != nil {
 			b.Fatal(err.Error())

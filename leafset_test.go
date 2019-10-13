@@ -10,14 +10,20 @@ func TestLeafSetinsertNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", self_id.String())
 
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("%s\n", other_id.String())
 	t.Logf("Diff: %v\n", self_id.Diff(other_id))
 	leafset := newLeafSet(self)
@@ -46,13 +52,18 @@ func TestLeafSetDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	other_id, err := NodeIDFromBytes([]byte("this is some other Node for testing purposes only."))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 	r, err := leafset.insertNode(*other)
 	if err != nil {
@@ -84,18 +95,26 @@ func TestLeafSetDeleteFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	second, err := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	first_side := self.ID.RelPos(other_id)
 	second_side := self.ID.RelPos(second_id)
 	if first_side != second_side {
@@ -156,18 +175,26 @@ func TestLeafSetDeleteLast(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	other_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	second, err := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	first_side := self.ID.RelPos(other_id)
 	second_side := self.ID.RelPos(second_id)
 	if first_side != second_side {
@@ -228,23 +255,34 @@ func TestLeafSetDeleteMiddle(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	first_id, err := NodeIDFromBytes([]byte("1234557890abcdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	second_id, err := NodeIDFromBytes([]byte("1234557890abbdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	second, err := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	third_id, err := NodeIDFromBytes([]byte("1234557890accdef"))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	third := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
+	third, err := NewNode(third_id, "127.0.0.4", "127.0.0.4", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	first_side := self.ID.RelPos(first_id)
 	second_side := self.ID.RelPos(second_id)
 	third_side := self.ID.RelPos(third_id)
@@ -345,15 +383,20 @@ func TestLeafSetScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 
 	first_id, err := NodeIDFromBytes([]byte("12345677890abcde"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := leafset.insertNode(*first)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -365,7 +408,10 @@ func TestLeafSetScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	second := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	second, err := NewNode(second_id, "127.0.0.3", "127.0.0.3", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r2, err := leafset.insertNode(*second)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -412,15 +458,20 @@ func TestLeafSetRouteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := leafset.insertNode(*first)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -455,15 +506,20 @@ func TestLeafSetRouteMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890acdefg"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := leafset.insertNode(*first)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -496,15 +552,20 @@ func TestLeafSetRouteNoneContained(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890abcdeh"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := leafset.insertNode(*first)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -535,15 +596,20 @@ func TestLeafSetRouteNoneCloser(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 
 	first_id, err := NodeIDFromBytes([]byte("1234567890abcdez"))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		t.Fatal(err)
+	}
 	r, err := leafset.insertNode(*first)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -585,16 +651,21 @@ func BenchmarkLeafSetInsert(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 	benchRand.Seed(randSeed)
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		otherId := randomNodeID()
-		other := *NewNode(otherId, "127.0.0.1", "127.0.0.2", "testing", 55555)
-		_, err = leafset.insertNode(other)
+		other, err := NewNode(otherId, "127.0.0.1", "127.0.0.2", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
+		_, err = leafset.insertNode(*other)
 	}
 }
 
@@ -605,14 +676,19 @@ func BenchmarkLeafSetGetByID(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
-
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	leafset := newLeafSet(self)
 	benchRand.Seed(randSeed)
 
 	otherId := randomNodeID()
-	other := *NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
-	_, err = leafset.insertNode(other)
+	other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, err = leafset.insertNode(*other)
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
@@ -630,13 +706,19 @@ func initBenchLeafSet(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	if err != nil {
+		b.Fatal(err)
+	}
 	benchLeafSet = newLeafSet(self)
 	benchRand.Seed(randSeed)
 
 	for i := 0; i < 100000; i++ {
 		id := randomNodeID()
-		node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		if err != nil {
+			b.Fatal(err)
+		}
 		_, err = benchLeafSet.insertNode(*node)
 		if err != nil {
 			b.Fatal(err.Error())

@@ -84,7 +84,10 @@ func makeCluster(idBytes string) (*Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	node := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		return nil, err
+	}
 	cluster := NewCluster(node, nil)
 	cluster.SetHeartbeatFrequency(10)
 	cluster.SetNetworkTimeout(1)
@@ -126,7 +129,7 @@ func TestClusterJoinTwo(t *testing.T) {
 		}
 	}()
 	time.Sleep(2 * time.Millisecond)
-	err = two.Join(one.self.LocalAddr, one.self.Port)
+	err = two.Join(one.self.LocalAddr.String(), one.self.Port)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -213,7 +216,7 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 		}
 	}()
 	time.Sleep(2 * time.Millisecond)
-	err = two.Join(one.self.LocalAddr, one.self.Port)
+	err = two.Join(one.self.LocalAddr.String(), one.self.Port)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -250,7 +253,7 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 		}
 	}
 	ticker.Stop()
-	err = three.Join(two.self.LocalAddr, two.self.Port)
+	err = three.Join(two.self.LocalAddr.String(), two.self.Port)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

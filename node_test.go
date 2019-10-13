@@ -10,7 +10,10 @@ func TestNodeVersionUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	self.updateVersions(2, 3, 4)
 	if self.routingTableVersion != 2 {
 		t.Errorf("Routing table version was supposed to be %d, was %d instead.", 2, self.routingTableVersion)
@@ -29,7 +32,10 @@ func TestNodeVersionUpdateMixed(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
 	self.updateVersions(2, 3, 4)
 	if self.routingTableVersion != 2 {
 		t.Errorf("Routing table version was supposed to be %d, was %d instead.", 2, self.routingTableVersion)

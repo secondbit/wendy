@@ -1,18 +1,19 @@
 package wendy
 
 import (
-	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/multiformats/go-multiaddr"
 )
 
 // Node represents a specific machine in the cluster.
 type Node struct {
-	LocalAddr              string // The multiaddr through which the Node should be accessed by other Nodes with an identical Region
-	GlobalAddr             string // The multiaddr through which the Node should be accessed by other Nodes whose Region differs
-	Port                   int    // The port the Node is listening on
-	Region                 string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
+	LocalAddr              multiaddr.Multiaddr // The multiaddr through which the Node should be accessed by other Nodes with an identical Region
+	GlobalAddr             multiaddr.Multiaddr // The multiaddr through which the Node should be accessed by other Nodes whose Region differs
+	Port                   int                 // The port the Node is listening on
+	Region                 string              // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
 	ID                     NodeID
 	proximity              int64
 	mutex                  *sync.RWMutex // lock and unlock a Node for concurrency safety
@@ -23,11 +24,20 @@ type Node struct {
 }
 
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
-func NewNode(id NodeID, local, global, region string, port int) *Node {
+// TODO(postables): refactor port shit
+func NewNode(id NodeID, local, global, region string, port int) (*Node, error) {
+	localAddr, err := multiaddr.NewMultiaddr(local)
+	if err != nil {
+		return nil, err
+	}
+	globalAddr, err := multiaddr.NewMultiaddr(global)
+	if err != nil {
+		return nil, err
+	}
 	return &Node{
 		ID:                     id,
-		LocalAddr:              local,
-		GlobalAddr:             global,
+		LocalAddr:              localAddr,
+		GlobalAddr:             globalAddr,
 		Port:                   port,
 		Region:                 region,
 		proximity:              -1,
@@ -36,29 +46,31 @@ func NewNode(id NodeID, local, global, region string, port int) *Node {
 		leafsetVersion:         0,
 		routingTableVersion:    0,
 		neighborhoodSetVersion: 0,
-	}
+	}, nil
 }
 
 // IsZero returns whether or the given Node has been initialised or if it's an empty Node struct. IsZero returns true if the Node has been initialised, false if it's an empty struct.
 func (self Node) IsZero() bool {
-	return self.LocalAddr == "" && self.GlobalAddr == "" && self.Port == 0
+	return self.LocalAddr.String() == "" && self.GlobalAddr.String() == "" && self.Port == 0
 }
 
-// GetIP returns the IP and port that should be used when communicating with a Node, to respect Regions.
-func (self Node) GetIP(other Node) string {
+// GetIP returns the multiaddr and port that should be used when communicating with a Node, to respect Regions.
+// TODO(postables): change to GetMultiaddr
+func (self Node) GetIP(other Node) multiaddr.Multiaddr {
 	self.mutex.RLock()
 	defer self.mutex.RUnlock()
 	if other.mutex != nil {
 		other.mutex.RLock()
 		defer other.mutex.RUnlock()
 	}
-	ip := ""
+	var ip multiaddr.Multiaddr
 	if self.Region == other.Region {
 		ip = other.LocalAddr
 	} else {
 		ip = other.GlobalAddr
 	}
-	ip = ip + ":" + strconv.Itoa(other.Port)
+	// TODO(refactor port shit)
+	//ip = ip + ":" + strconv.Itoa(other.Port)
 	return ip
 }
 

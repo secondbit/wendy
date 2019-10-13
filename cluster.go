@@ -171,9 +171,10 @@ func (c *Cluster) String() string {
 	return c.ID().String()
 }
 
-// GetIP returns the IP address to use when communicating with a Node.
+// GetIP returns the multi address to use when communicating with a Node.
+// TODO(postables): change to GetMultiaddr
 func (c *Cluster) GetIP(node Node) string {
-	return c.self.GetIP(node)
+	return c.self.GetIP(node).String()
 }
 
 // SetLogger sets the log.Logger that the Cluster, along with its child routingTable and leafSet, will write to.
