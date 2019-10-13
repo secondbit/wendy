@@ -30,7 +30,7 @@ func newLeafSet(self *Node) *leafSet {
 var lsDuplicateInsertError = errors.New("Node already exists in leaf set.")
 
 func (l *leafSet) insertNode(node Node) (*Node, error) {
-	return l.insertValues(node.ID, node.LocalAddr.String(), node.GlobalAddr.String(), node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion)
+	return l.insertValues(node.ID, node.LocalAddr, node.GlobalAddr, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion)
 }
 
 func (l *leafSet) insertValues(id NodeID, LocalAddr, GlobalAddr, region string, port int, rTVersion, lSVersion, nSVersion uint64) (*Node, error) {

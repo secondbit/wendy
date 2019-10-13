@@ -3,6 +3,7 @@ package wendy
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -447,6 +448,7 @@ func (c *Cluster) handleClient(conn net.Conn) {
 	decoder := json.NewDecoder(conn)
 	err := decoder.Decode(&msg)
 	if err != nil {
+		fmt.Println("dings")
 		c.fanOutError(err)
 		return
 	}

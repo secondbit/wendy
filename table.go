@@ -28,7 +28,7 @@ func newRoutingTable(self *Node) *routingTable {
 var rtDuplicateInsertError = errors.New("Node already exists in routing table.")
 
 func (t *routingTable) insertNode(node Node, proximity int64) (*Node, error) {
-	return t.insertValues(node.ID, node.LocalAddr.String(), node.GlobalAddr.String(), node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
+	return t.insertValues(node.ID, node.LocalAddr, node.GlobalAddr, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
 }
 
 func (t *routingTable) insertValues(id NodeID, LocalAddr, GlobalAddr, region string, port int, rtVersion, lsVersion, nsVersion uint64, proximity int64) (*Node, error) {

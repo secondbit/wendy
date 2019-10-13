@@ -11,10 +11,10 @@ import (
 
 // Node represents a specific machine in the cluster.
 type Node struct {
-	LocalAddr              multiaddr.Multiaddr // The multiaddr through which the Node should be accessed by other Nodes with an identical Region
-	GlobalAddr             multiaddr.Multiaddr // The multiaddr through which the Node should be accessed by other Nodes whose Region differs
-	Port                   int                 // The port the Node is listening on
-	Region                 string              // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
+	LocalAddr              string // The multiaddr through which the Node should be accessed by other Nodes with an identical Region
+	GlobalAddr             string // The multiaddr through which the Node should be accessed by other Nodes whose Region differs
+	Port                   int    // The port the Node is listening on
+	Region                 string // A string that allows you to intelligently route between local and global requests for, e.g., EC2 regions
 	ID                     NodeID
 	proximity              int64
 	mutex                  *sync.RWMutex // lock and unlock a Node for concurrency safety
@@ -41,8 +41,8 @@ func NewNode(id NodeID, local, global, region string, port int) (*Node, error) {
 	}
 	return &Node{
 		ID:                     id,
-		LocalAddr:              localAddr.Encapsulate(portAddr),
-		GlobalAddr:             globalAddr.Encapsulate(portAddr),
+		LocalAddr:              localAddr.Encapsulate(portAddr).String(),
+		GlobalAddr:             globalAddr.Encapsulate(portAddr).String(),
 		Port:                   port,
 		Region:                 region,
 		proximity:              -1,
@@ -54,9 +54,19 @@ func NewNode(id NodeID, local, global, region string, port int) (*Node, error) {
 	}, nil
 }
 
+func (self *Node) IPToMultiAaddr(local bool) multiaddr.Multiaddr {
+	var addr multiaddr.Multiaddr
+	if local {
+		addr, _ = multiaddr.NewMultiaddr(self.LocalAddr)
+	} else {
+		addr, _ = multiaddr.NewMultiaddr(self.GlobalAddr)
+	}
+	return addr
+}
+
 // IsZero returns whether or the given Node has been initialised or if it's an empty Node struct. IsZero returns true if the Node has been initialised, false if it's an empty struct.
 func (self Node) IsZero() bool {
-	return self.LocalAddr.String() == "" && self.GlobalAddr.String() == "" && self.Port == 0
+	return self.LocalAddr == "" && self.GlobalAddr == "" && self.Port == 0
 }
 
 // GetIP returns the multiaddr and port that should be used when communicating with a Node, to respect Regions.
@@ -70,9 +80,9 @@ func (self Node) GetIP(other Node) multiaddr.Multiaddr {
 	}
 	var ip multiaddr.Multiaddr
 	if self.Region == other.Region {
-		ip = other.LocalAddr
+		ip, _ = multiaddr.NewMultiaddr(other.LocalAddr)
 	} else {
-		ip = other.GlobalAddr
+		ip, _ = multiaddr.NewMultiaddr(other.GlobalAddr)
 	}
 	// TODO(refactor port shit)
 	//ip = ip + ":" + strconv.Itoa(other.Port)
