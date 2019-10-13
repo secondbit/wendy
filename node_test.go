@@ -10,7 +10,7 @@ func TestNodeVersionUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestNodeVersionUpdateMixed(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

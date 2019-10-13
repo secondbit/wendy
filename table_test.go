@@ -23,7 +23,7 @@ func TestRoutingTableInsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +33,7 @@ func TestRoutingTableInsert(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestRoutingTableDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestRoutingTableDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestRoutingTableScanSplit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestRoutingTableRouteNone(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestRoutingTableRouteNone(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	row := self_id.CommonPrefixLen(first_id)
-	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestRoutingTableScanMultipleRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	second, err := NewNode(second_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	second, err := NewNode(second_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestRoutingTableRouteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestRoutingTableRouteOnly(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 	row := self_id.CommonPrefixLen(first_id)
-	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +336,7 @@ func TestRoutingTableRouteMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestRoutingTableRouteMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	first, err := NewNode(first_id, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	first, err := NewNode(first_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +402,7 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -412,7 +412,7 @@ func BenchmarkRoutingTableInsert(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		otherId := randomNodeID()
-		other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+		other, err := NewNode(otherId, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -427,7 +427,7 @@ func BenchmarkRoutingTableGetByID(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -435,7 +435,7 @@ func BenchmarkRoutingTableGetByID(b *testing.B) {
 	benchRand.Seed(randSeed)
 
 	otherId := randomNodeID()
-	other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+	other, err := NewNode(otherId, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -456,7 +456,7 @@ func initBenchTable(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -465,7 +465,7 @@ func initBenchTable(b *testing.B) {
 
 	for i := 0; i < 100000; i++ {
 		id := randomNodeID()
-		node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		node, err := NewNode(id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 		if err != nil {
 			b.Fatal(err)
 		}

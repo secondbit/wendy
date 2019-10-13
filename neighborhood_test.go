@@ -10,7 +10,7 @@ func TestNeighborhoodSetInsertNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestNeighborhoodSetInsertNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestNeighborhoodSetDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestNeighborhoodSetDeleteOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestNeighborhoodSetDeleteFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -107,7 +107,7 @@ func TestNeighborhoodSetDeleteFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +171,7 @@ func TestNeighborhoodSetDeleteLast(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestNeighborhoodSetDeleteLast(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestNeighborhoodSetDeleteMiddle(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	self, err := NewNode(self_id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	self, err := NewNode(self_id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,7 +255,7 @@ func TestNeighborhoodSetDeleteMiddle(t *testing.T) {
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
-	other, err := NewNode(other_id, "127.0.0.2", "127.0.0.2", "testing", 0)
+	other, err := NewNode(other_id, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,7 +345,7 @@ func BenchmarkNeighborhoodSetInsert(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -355,7 +355,7 @@ func BenchmarkNeighborhoodSetInsert(b *testing.B) {
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		otherId := randomNodeID()
-		other, err := NewNode(otherId, "127.0.0.1", "127.0.0.2", "testing", 55555)
+		other, err := NewNode(otherId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -370,7 +370,7 @@ func BenchmarkNeighborhoodSetGetByID(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -379,7 +379,7 @@ func BenchmarkNeighborhoodSetGetByID(b *testing.B) {
 
 	for i := 0; i < len(neighborhood.nodes); i++ {
 		otherId := randomNodeID()
-		other, err := NewNode(otherId, "127.0.0.2", "127.0.0.2", "testing", 55555)
+		other, err := NewNode(otherId, toMultiAddrString("127.0.0.2"), toMultiAddrString("127.0.0.2"), "testing", 55555)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -402,7 +402,7 @@ func initBenchNeighborhoodSet(b *testing.B) {
 	if err != nil {
 		b.Fatalf(err.Error())
 	}
-	self, err := NewNode(selfId, "127.0.0.1", "127.0.0.1", "testing", 55555)
+	self, err := NewNode(selfId, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func initBenchNeighborhoodSet(b *testing.B) {
 
 	for i := 0; i < len(benchNeighborhood.nodes); i++ {
 		id := randomNodeID()
-		node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 55555)
+		node, err := NewNode(id, toMultiAddrString("127.0.0.1"), toMultiAddrString("127.0.0.1"), "testing", 55555)
 		if err != nil {
 			b.Fatal(err)
 		}
