@@ -1,9 +1,14 @@
 package wendy
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
+
+func toMultiAddrString(ip string) string {
+	return fmt.Sprintf("/ip4/%s", ip)
+}
 
 type forwardData struct {
 	next NodeID
@@ -84,7 +89,10 @@ func makeCluster(idBytes string) (*Cluster, error) {
 	if err != nil {
 		return nil, err
 	}
-	node, err := NewNode(id, "127.0.0.1", "127.0.0.1", "testing", 0)
+	node, err := NewNode(
+		id,
+		toMultiAddrString("127.0.0.1"),
+		toMultiAddrString("127.0.0.1"), "testing", 0)
 	if err != nil {
 		return nil, err
 	}

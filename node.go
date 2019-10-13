@@ -1,6 +1,7 @@
 package wendy
 
 import (
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -26,6 +27,10 @@ type Node struct {
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
 // TODO(postables): refactor port shit
 func NewNode(id NodeID, local, global, region string, port int) (*Node, error) {
+	portAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/tcp/%v", port))
+	if err != nil {
+		return nil, err
+	}
 	localAddr, err := multiaddr.NewMultiaddr(local)
 	if err != nil {
 		return nil, err
@@ -36,8 +41,8 @@ func NewNode(id NodeID, local, global, region string, port int) (*Node, error) {
 	}
 	return &Node{
 		ID:                     id,
-		LocalAddr:              localAddr,
-		GlobalAddr:             globalAddr,
+		LocalAddr:              localAddr.Encapsulate(portAddr),
+		GlobalAddr:             globalAddr.Encapsulate(portAddr),
 		Port:                   port,
 		Region:                 region,
 		proximity:              -1,
