@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 const idLen = 32
@@ -20,10 +22,25 @@ type NodeID [2]uint64
 func NodeIDFromBytes(source []byte) (NodeID, error) {
 	var result NodeID
 	if len(source) < 16 {
-		return result, errors.New("Not enough bytes to create a NodeID.")
+		return [2]uint64{}, errors.New("not enough bytes to create a nodeid")
 	}
 	result[0] = binary.BigEndian.Uint64(source)
 	result[1] = binary.BigEndian.Uint64(source[8:])
+	return result, nil
+}
+
+// NodeIDFromPeerID creates a NodeID from a libp2p peer ID
+func NodeIDFromPeerID(pid peer.ID) (NodeID, error) {
+	var result NodeID
+	if len(pid) < 16 {
+		return [2]uint64{}, errors.New("not enough bytes to create a nodeid")
+	}
+	pidBytes, err := pid.Marshal()
+	if err != nil {
+		return [2]uint64{}, err
+	}
+	result[0] = binary.BigEndian.Uint64(pidBytes)
+	result[1] = binary.BigEndian.Uint64(pidBytes[8:])
 	return result, nil
 }
 
@@ -192,7 +209,7 @@ func (id NodeID) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON fulfills the Unmarshaler interface, allowing NodeIDs to be unserialised from JSON safely.
 func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if id == nil {
-		return errors.New("UnmarshalJSON on nil NodeID.")
+		return errors.New("UnmarshalJSON on nil nodeid")
 	}
 	var str string
 	err := json.Unmarshal(source, &str)
@@ -203,11 +220,11 @@ func (id *NodeID) UnmarshalJSON(source []byte) error {
 	if err != nil {
 		return err
 	}
-	new_id, err := NodeIDFromBytes([]byte(dec))
+	newID, err := NodeIDFromBytes([]byte(dec))
 	if err != nil {
 		return err
 	}
-	*id = new_id
+	*id = newID
 	return nil
 }
 
