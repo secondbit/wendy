@@ -84,7 +84,7 @@ func (t *testCallback) OnHeartbeat(node Node) {
 	}
 }
 
-func makeCluster(idBytes string) (*Cluster, error) {
+func makeCluster(idBytes string, port int) (*Cluster, error) {
 	id, err := NodeIDFromBytes([]byte(idBytes))
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func makeCluster(idBytes string) (*Cluster, error) {
 	node, err := NewNode(
 		id,
 		toMultiAddrString("127.0.0.1"),
-		toMultiAddrString("127.0.0.1"), "testing", 0)
+		toMultiAddrString("127.0.0.1"), "testing", port)
 	if err != nil {
 		return nil, err
 	}
@@ -108,14 +108,14 @@ func TestClusterJoinTwo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	one, err := makeCluster("this is a test Node for testing purposes only.")
+	one, err := makeCluster("this is a test Node for testing purposes only.", 55555)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	one.debug("One is %s", one.self.ID)
 	oneCB := newTestCallback(t)
 	one.RegisterCallback(oneCB)
-	two, err := makeCluster("this is some other Node for testing purposes only.")
+	two, err := makeCluster("this is some other Node for testing purposes only.", 55556)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -137,7 +137,7 @@ func TestClusterJoinTwo(t *testing.T) {
 		}
 	}()
 	time.Sleep(2 * time.Millisecond)
-	err = two.Join(one.self.LocalAddr.String(), one.self.Port)
+	err = two.Join(one.self.LocalAddr)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -181,21 +181,21 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping test in short mode.")
 	}
-	one, err := makeCluster("A test Node for testing purposes only.")
+	one, err := makeCluster("A test Node for testing purposes only.", 55555)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	one.debug("One is %s", one.self.ID)
 	oneCB := newTestCallback(t)
 	one.RegisterCallback(oneCB)
-	two, err := makeCluster("just some other Node for testing purposes only.")
+	two, err := makeCluster("just some other Node for testing purposes only.", 55556)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
 	two.debug("Two is %s", two.self.ID)
 	twoCB := newTestCallback(t)
 	two.RegisterCallback(twoCB)
-	three, err := makeCluster("yet a third Node for testing purposes only.")
+	three, err := makeCluster("yet a third Node for testing purposes only.", 55557)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -224,7 +224,7 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 		}
 	}()
 	time.Sleep(2 * time.Millisecond)
-	err = two.Join(one.self.LocalAddr.String(), one.self.Port)
+	err = two.Join(one.self.LocalAddr)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -261,7 +261,7 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 		}
 	}
 	ticker.Stop()
-	err = three.Join(two.self.LocalAddr.String(), two.self.Port)
+	err = three.Join(two.self.LocalAddr)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

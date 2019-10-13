@@ -11,6 +11,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr-net"
 )
 
 type StateMask struct {
@@ -173,8 +176,8 @@ func (c *Cluster) String() string {
 
 // GetIP returns the multi address to use when communicating with a Node.
 // TODO(postables): change to GetMultiaddr
-func (c *Cluster) GetIP(node Node) string {
-	return c.self.GetIP(node).String()
+func (c *Cluster) GetIP(node Node) multiaddr.Multiaddr {
+	return c.self.GetIP(node)
 }
 
 // SetLogger sets the log.Logger that the Cluster, along with its child routingTable and leafSet, will write to.
@@ -383,12 +386,11 @@ func (c *Cluster) Route(key NodeID) (*Node, error) {
 // Join expresses a Node's desire to join the Cluster, kicking off a process that will populate its child leafSet, neighborhoodSet and routingTable. Once that process is complete, the Node can be said to be fully participating in the Cluster.
 //
 // The IP and port passed to Join should be those of a known Node in the Cluster. The algorithm assumes that the known Node is close in proximity to the current Node, but that is not a hard requirement.
-func (c *Cluster) Join(ip string, port int) error {
+func (c *Cluster) Join(addr multiaddr.Multiaddr) error {
+	///func (c *Cluster) Join(ip string, port int) error {
 	credentials := c.marshalCredentials()
-	c.debug("Sending join message to %s:%d", ip, port)
 	msg := c.NewMessage(NODE_JOIN, c.self.ID, credentials)
-	address := ip + ":" + strconv.Itoa(port)
-	return c.SendToIP(msg, address)
+	return c.SendToIP(msg, addr)
 }
 
 func (c *Cluster) fanOutError(err error) {
@@ -519,12 +521,11 @@ func (c *Cluster) send(msg Message, destination *Node) error {
 }
 
 // SendToIP sends a message directly to an IP using the Wendy networking logic.
-func (c *Cluster) SendToIP(msg Message, address string) error {
+func (c *Cluster) SendToIP(msg Message, maddr multiaddr.Multiaddr) error {
 	c.debug("Sending message %s", string(msg.Value))
-	conn, err := net.DialTimeout("tcp", address, time.Duration(c.getNetworkTimeout())*time.Second)
+	conn, err := manet.Dial(maddr)
 	if err != nil {
-		c.debug(err.Error())
-		return deadNodeError
+		return err
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(time.Duration(c.getNetworkTimeout()) * time.Second))
@@ -533,7 +534,6 @@ func (c *Cluster) SendToIP(msg Message, address string) error {
 	if err != nil {
 		return err
 	}
-	c.debug("Sent message %s  with purpose %d to %s", msg.Key, msg.Purpose, address)
 	_, err = conn.Read(nil)
 	if err != nil {
 		if neterr, ok := err.(net.Error); ok && neterr.Timeout() {
