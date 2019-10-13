@@ -376,7 +376,7 @@ func TestLeafSetScanSplit(t *testing.T) {
 	first_side := self.ID.RelPos(first_id)
 	second_side := self.ID.RelPos(second_id)
 	if first_side != second_side {
-		t.Fatal("Nodes not inserted on the same side. %v vs. %v.", first_side, second_side)
+		t.Fatalf("Nodes not inserted on the same side. %v vs. %v.", first_side, second_side)
 	}
 	message_id, err := NodeIDFromBytes([]byte("12345657890abcde"))
 	if err != nil {
