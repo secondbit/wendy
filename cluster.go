@@ -310,7 +310,6 @@ func (c *Cluster) Listen() error {
 			break
 		}
 	}
-	return nil
 }
 
 // Send routes a message through the Cluster.

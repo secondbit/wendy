@@ -132,7 +132,6 @@ func (l *leafSet) getNextNode(id NodeID) (*Node, error) {
 	} else {
 		return nil, throwIdentityError("get next", "from", "leaf set")
 	}
-	return nil, nodeNotFoundError
 }
 
 func (l *leafSet) route(key NodeID) (*Node, error) {
@@ -175,7 +174,6 @@ func (l *leafSet) route(key NodeID) (*Node, error) {
 	} else {
 		return nil, throwIdentityError("route to", "in", "leaf set")
 	}
-	return nil, nodeNotFoundError
 }
 
 func (l *leafSet) export() [2][16]*Node {

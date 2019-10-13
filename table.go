@@ -140,7 +140,6 @@ func (t *routingTable) removeNode(id NodeID) (*Node, error) {
 	} else {
 		return nil, nodeNotFoundError
 	}
-	return nil, nil
 }
 
 func (t *routingTable) list(rows, cols []int) []*Node {
