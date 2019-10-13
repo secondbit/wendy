@@ -126,7 +126,7 @@ func TestClusterJoinTwo(t *testing.T) {
 		}
 	}()
 	time.Sleep(2 * time.Millisecond)
-	err = two.Join(one.self.LocalIP, one.self.Port)
+	err = two.Join(one.self.LocalAddr, one.self.Port)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -213,7 +213,7 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 		}
 	}()
 	time.Sleep(2 * time.Millisecond)
-	err = two.Join(one.self.LocalIP, one.self.Port)
+	err = two.Join(one.self.LocalAddr, one.self.Port)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -250,7 +250,7 @@ func TestClusterJoinThreeToTwo(t *testing.T) {
 		}
 	}
 	ticker.Stop()
-	err = three.Join(two.self.LocalIP, two.self.Port)
+	err = three.Join(two.self.LocalAddr, two.self.Port)
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

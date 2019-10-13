@@ -28,16 +28,16 @@ func newNeighborhoodSet(self *Node) *neighborhoodSet {
 var nsDuplicateInsertError = errors.New("Node already exists in neighborhood set.")
 
 func (n *neighborhoodSet) insertNode(node Node, proximity int64) (*Node, error) {
-	return n.insertValues(node.ID, node.LocalIP, node.GlobalIP, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
+	return n.insertValues(node.ID, node.LocalAddr, node.GlobalAddr, node.Region, node.Port, node.routingTableVersion, node.leafsetVersion, node.neighborhoodSetVersion, proximity)
 }
 
-func (n *neighborhoodSet) insertValues(id NodeID, localIP, globalIP, region string, port int, rTVersion, lSVersion, nSVersion uint64, proximity int64) (*Node, error) {
+func (n *neighborhoodSet) insertValues(id NodeID, LocalAddr, GlobalAddr, region string, port int, rTVersion, lSVersion, nSVersion uint64, proximity int64) (*Node, error) {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 	if id.Equals(n.self.ID) {
 		return nil, throwIdentityError("insert", "into", "neighborhood set")
 	}
-	insertNode := NewNode(id, localIP, globalIP, region, port)
+	insertNode := NewNode(id, LocalAddr, GlobalAddr, region, port)
 	insertNode.updateVersions(rTVersion, lSVersion, nSVersion)
 	insertNode.setProximity(proximity)
 	newNS := [32]*Node{}
