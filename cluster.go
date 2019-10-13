@@ -176,7 +176,6 @@ func (c *Cluster) String() string {
 }
 
 // GetIP returns the multi address to use when communicating with a Node.
-// TODO(postables): change to GetMultiaddr
 func (c *Cluster) GetIP(node Node) multiaddr.Multiaddr {
 	return c.self.GetIP(node)
 }

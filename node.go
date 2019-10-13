@@ -25,7 +25,6 @@ type Node struct {
 }
 
 // NewNode initialises a new Node and its associated mutexes. It does *not* update the proximity of the Node.
-// TODO(postables): refactor port shit
 func NewNode(id NodeID, local, global, region string, port int) (*Node, error) {
 	portAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/tcp/%v", port))
 	if err != nil {
@@ -70,7 +69,6 @@ func (self Node) IsZero() bool {
 }
 
 // GetIP returns the multiaddr and port that should be used when communicating with a Node, to respect Regions.
-// TODO(postables): change to GetMultiaddr
 func (self Node) GetIP(other Node) multiaddr.Multiaddr {
 	self.mutex.RLock()
 	defer self.mutex.RUnlock()
@@ -84,8 +82,6 @@ func (self Node) GetIP(other Node) multiaddr.Multiaddr {
 	} else {
 		ip, _ = multiaddr.NewMultiaddr(other.GlobalAddr)
 	}
-	// TODO(refactor port shit)
-	//ip = ip + ":" + strconv.Itoa(other.Port)
 	return ip
 }
 
