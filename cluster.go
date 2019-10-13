@@ -38,11 +38,18 @@ func (m StateMask) includeNS() bool {
 	return m.Mask == (m.Mask | nS)
 }
 
+type state struct {
+	Row  int  `json:"row,omitempty"`
+	Pos  int  `json:"pos,omitempty"`
+	Side int  `json:"side,omitempty"`
+	Node Node `json:"node"`
+}
+
 type stateTables struct {
-	RoutingTable    *[32][16]*Node `json:"rt,omitempty"`
-	LeafSet         *[2][16]*Node  `json:"ls,omitempty"`
-	NeighborhoodSet *[32]*Node     `json:"ns,omitempty"`
-	EOL             bool           `json:"eol,omitempty"`
+	RoutingTable    []state `json:"rt,omitempty"`
+	LeafSet         []state `json:"ls,omitempty"`
+	NeighborhoodSet []state `json:"ns,omitempty"`
+	EOL             bool    `json:"eol,omitempty"`
 }
 
 type proximityCache struct {
@@ -701,16 +708,13 @@ func (c *Cluster) onMessageReceived(msg Message) {
 func (c *Cluster) dumpStateTables(tables StateMask) (stateTables, error) {
 	var state stateTables
 	if tables.includeRT() {
-		routingTable := c.table.export(tables.Rows, tables.Cols)
-		state.RoutingTable = &routingTable
+		state.RoutingTable = c.table.export(tables.Rows, tables.Cols)
 	}
 	if tables.includeLS() {
-		leafSet := c.leafset.export()
-		state.LeafSet = &leafSet
+		state.LeafSet = c.leafset.export()
 	}
 	if tables.includeNS() {
-		neighborhoodSet := c.neighborhoodset.export()
-		state.NeighborhoodSet = &neighborhoodSet
+		state.NeighborhoodSet = c.neighborhoodset.export()
 	}
 	return state, nil
 }
@@ -896,41 +900,22 @@ func (c *Cluster) insertMessage(msg Message) error {
 	if err != nil {
 		return err
 	}
-	if state.NeighborhoodSet != nil {
-		for _, node := range state.NeighborhoodSet {
-			if node == nil {
-				continue
-			}
-			err = c.insert(*node, StateMask{Mask: nS})
-			if err != nil {
-				return err
-			}
+	for _, state := range state.NeighborhoodSet {
+		err = c.insert(state.Node, StateMask{Mask: nS})
+		if err != nil {
+			return err
 		}
 	}
-	if state.LeafSet != nil {
-		for _, side := range state.LeafSet {
-			for _, node := range side {
-				if node == nil {
-					continue
-				}
-				err = c.insert(*node, StateMask{Mask: lS | nS})
-				if err != nil {
-					return err
-				}
-			}
+	for _, state := range state.LeafSet {
+		err = c.insert(state.Node, StateMask{Mask: lS | nS})
+		if err != nil {
+			return err
 		}
 	}
-	if state.RoutingTable != nil {
-		for _, row := range state.RoutingTable {
-			for _, node := range row {
-				if node == nil {
-					continue
-				}
-				err = c.insert(*node, StateMask{Mask: rT | nS})
-				if err != nil {
-					return err
-				}
-			}
+	for _, state := range state.RoutingTable {
+		err = c.insert(state.Node, StateMask{Mask: rT | nS})
+		if err != nil {
+			return err
 		}
 	}
 	return nil

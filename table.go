@@ -174,22 +174,22 @@ func (t *routingTable) list(rows, cols []int) []*Node {
 	return nodes
 }
 
-func (t *routingTable) export(rows, cols []int) [32][16]*Node {
+func (t *routingTable) export(rows, cols []int) []state {
 	t.lock.RLock()
 	defer t.lock.RUnlock()
-	nodes := [32][16]*Node{}
+	states := make([]state, 0)
 	if len(rows) > 0 {
 		for _, row := range rows {
 			if len(cols) > 0 {
 				for _, col := range cols {
 					if t.nodes[row][col] != nil {
-						nodes[row][col] = t.nodes[row][col]
+						states = append(states, state{Row: row, Pos: col, Node: *t.nodes[row][col]})
 					}
 				}
 			} else {
 				for col, node := range t.nodes[row] {
 					if node != nil {
-						nodes[row][col] = node
+						states = append(states, state{Row: row, Pos: col, Node: *t.nodes[row][col]})
 					}
 				}
 			}
@@ -198,12 +198,12 @@ func (t *routingTable) export(rows, cols []int) [32][16]*Node {
 		for rowNo, row := range t.nodes {
 			for colNo, node := range row {
 				if node != nil {
-					nodes[rowNo][colNo] = node
+					states = append(states, state{Row: rowNo, Pos: colNo, Node: *node})
 				}
 			}
 		}
 	}
-	return nodes
+	return states
 }
 
 func (t *routingTable) debug(format string, v ...interface{}) {
